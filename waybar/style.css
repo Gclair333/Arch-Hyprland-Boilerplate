@@ -62,9 +62,15 @@ window#waybar {
 }
 
 #brightness #backlight,
-#volume #pulseaudio {
+#volume #pulseaudio,
+#volume #custom-mute {
 	background: transparent;
 	border: none;
+}
+
+#volume #custom-mute {
+	color: @mauve;
+	padding: 0 8px;
 }
 
 /* ---- workspaces ---- */
