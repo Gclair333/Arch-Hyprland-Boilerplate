@@ -17,6 +17,8 @@ waybar/config          bar layout and modules
 waybar/style.css       bar theming (palette lives at the top)
 wofi/config            launcher behavior and geometry
 wofi/style.css         launcher theming
+scripts/screenshot.sh  grim/slurp wrapper (region/screen, copy/save)
+scripts/wifi-menu.sh   wofi + nmcli Wi-Fi picker, opened by the network pill
 ```
 
 ## Dependencies
@@ -37,11 +39,13 @@ Everything below is optional — the setup works without it, but these binds and
 inert until the matching tool is present.
 
 ```bash
-sudo pacman -S networkmanager            # click the network pill -> nmtui
-sudo pacman -S grim slurp wl-clipboard   # screenshot binds
+sudo pacman -S networkmanager            # Wi-Fi picker on the network pill (nmcli)
+sudo pacman -S grim slurp wl-clipboard   # screenshot binds + scripts/screenshot.sh
 sudo pacman -S playerctl                 # play/pause/next/prev media keys
-sudo pacman -S brightnessctl             # brightness keys
+sudo pacman -S brightnessctl             # brightness keys (the bar slider needs nothing)
 ```
+
+`networkmanager` must also be enabled: `sudo systemctl enable --now NetworkManager`.
 
 ### A note on `awww` (formerly `swww`)
 
@@ -58,17 +62,20 @@ These files map directly onto `~/.config`. Back up anything you already have:
 
 ```bash
 cp -r ~/.config/hypr ~/.config/hypr.bak     # repeat for waybar, wofi
-cp -r hypr waybar wofi ~/.config/
+cp -r hypr waybar wofi scripts ~/.config/
+chmod +x ~/.config/scripts/*.sh
 ```
 
-Then drop a wallpaper at `~/Pictures/wallpaper.jpg`, or edit the path in `hypr/hyprland.conf`.
+Then drop a wallpaper at `~/Pictures/wallpaper.jpg`, or edit the path in `hypr/hyprland.conf`
+(line 5). That path is hardcoded — if no file is there, Hyprland starts fine but the background
+stays black.
 
 ## Keybindings
 
 | Combo | Action |
 | --- | --- |
 | `SUPER + Return` | Terminal (kitty) |
-| `SUPER + R` / `SUPER + D` | App launcher (wofi) |
+| `SUPER + D` | App launcher (wofi) |
 | `SUPER + Q` | Close focused window |
 | `SUPER + F` | Toggle fullscreen |
 | `SUPER + V` | Toggle floating |
@@ -100,7 +107,7 @@ want more. You can also click the pills in the bar.
 | --- | --- |
 | `Print` | Whole screen to clipboard |
 | `SUPER + S` | Select a region to clipboard |
-| `SUPER + SHIFT + S` | Select a region to `~/Pictures/Screenshots/` |
+| `SUPER + SHIFT + S` | Select a region to clipboard **and** `~/Pictures/Screenshots/` |
 | Volume / mute / mic keys | via `wpctl` |
 | Play / next / previous | via `playerctl` |
 | Brightness keys | via `brightnessctl` |
@@ -114,8 +121,8 @@ want more. You can also click the pills in the bar.
 | CPU | Usage + load average | — |
 | RAM | Used / total / available | — |
 | Brightness | Level | **Slides out a drag bar** (scroll also works) |
-| Volume | Device + level | **Slides out a drag bar**; right-click mutes (scroll also works) |
-| Network | SSID, signal, IP | Opens `nmtui` in a floating window |
+| Volume | Device + level | **Slides out a drag bar**; scroll adjusts, revealed button mutes |
+| Network | SSID, signal, IP | **Wi-Fi picker** (`scripts/wifi-menu.sh` — wofi + nmcli) |
 | Battery | Charge + time remaining | — |
 
 Brightness and volume use Waybar's native `backlight/slider` and `pulseaudio/slider` inside a
@@ -125,6 +132,20 @@ needed** for the bar. Those tools are still listed as optional because the *keyb
 
 The brightness slider floors at 5% so a full drag left can't black out the screen. The clock is
 12-hour (`%I:%M %p`) — change it to `{:%H:%M}` in `waybar/config` for 24-hour.
+
+## Scripts
+
+Two helpers in `scripts/`, called by the binds and the network pill. Both degrade quietly if
+their tools aren't installed.
+
+**`screenshot.sh`** — `grim` + `slurp`, with `wl-copy` to the clipboard and an optional file
+copy. `notify-send` is best-effort, so no notification daemon just means no popup.
+
+**`wifi-menu.sh`** — a `wofi` list of nearby networks via `nmcli`: signal glyph, lock marker, a
+check on the active one. Picking a saved network reconnects; a new secured one prompts for a
+password in a `wofi --password` box. Also has rescan and a Wi-Fi on/off toggle. It reuses
+`wofi/style.css`, so it's themed with no extra config. Needs `networkmanager` running; for
+editing static/VPN/enterprise connections, `nm-connection-editor` is the GUI.
 
 ## Customizing the theme
 
@@ -163,7 +184,7 @@ form:
 
 ```bash
 layerrule  = blur on, ignore_alpha 0.3, match:namespace waybar
-windowrule = float on, size 60% 60%, center on, match:class nmtui-float
+windowrule = float on, size 60% 60%, center on, match:class <some-class>
 ```
 
 The pre-0.53 forms (`layerrule = blur, waybar` and `windowrule = float, class:foo`) are rejected

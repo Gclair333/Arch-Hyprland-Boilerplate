@@ -111,10 +111,10 @@
 		"format-wifi": "󰤨 {essid}",
 		"format-ethernet": "󰈀 {ifname}",
 		"format-disconnected": "󰤭 offline",
-		// nmtui in a floating kitty window; the float rule lives in hyprland.conf.
-		"on-click": "kitty --class nmtui-float nmtui",
-		"tooltip-format-wifi": "Wi-Fi\n{essid} ({signalStrength}%)\n{ipaddr}\nClick to manage networks",
-		"tooltip-format-ethernet": "Ethernet\n{ifname}\n{ipaddr}\nClick to manage connections",
+		// wofi-based Wi-Fi picker — inherits the launcher's Catppuccin styling.
+		"on-click": "~/.config/scripts/wifi-menu.sh",
+		"tooltip-format-wifi": "Wi-Fi\n{essid} ({signalStrength}%)\n{ipaddr}\nClick to pick a network",
+		"tooltip-format-ethernet": "Ethernet\n{ifname}\n{ipaddr}",
 		"tooltip-format-disconnected": "Offline\nClick to connect"
 	},
 
