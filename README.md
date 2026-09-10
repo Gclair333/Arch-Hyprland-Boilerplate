@@ -8,6 +8,9 @@ few minutes, then build on — not a full rice.
 
 <sub>Wallpaper not included. The network name in the bar is blurred in this shot.</sub>
 
+New to Arch, Hyprland, or ricing generally? **[LEARNING.md](LEARNING.md)** maps every file to
+what it controls and points at the actual docs behind this setup, not just this README.
+
 ## What's here
 
 - **Hyprland** — rounded corners, blur, shadows, and two custom animation curves
