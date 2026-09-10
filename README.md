@@ -25,10 +25,22 @@ wofi/style.css         launcher theming
 sudo pacman -S hyprland waybar wofi kitty awww ttf-jetbrains-mono-nerd
 ```
 
-The Waybar volume module shells out to `wpctl`, so it also expects PipeWire:
+The Waybar volume module and the volume keys use `wpctl`, so it also expects PipeWire:
 
 ```bash
 sudo pacman -S pipewire pipewire-pulse wireplumber
+```
+
+### Optional
+
+Everything below is optional — the setup works without it, but these binds and click actions stay
+inert until the matching tool is present.
+
+```bash
+sudo pacman -S networkmanager            # click the network pill -> nmtui
+sudo pacman -S grim slurp wl-clipboard   # screenshot binds
+sudo pacman -S playerctl                 # play/pause/next/prev media keys
+sudo pacman -S brightnessctl             # brightness keys
 ```
 
 ### A note on `awww` (formerly `swww`)
@@ -60,16 +72,52 @@ Then drop a wallpaper at `~/Pictures/wallpaper.jpg`, or edit the path in `hypr/h
 | `SUPER + Q` | Close focused window |
 | `SUPER + F` | Toggle fullscreen |
 | `SUPER + V` | Toggle floating |
+| `SUPER + SHIFT + E` | Exit Hyprland |
+
+**Workspaces**
+
+| Combo | Action |
+| --- | --- |
 | `SUPER + 1`…`5` | Switch to workspace |
 | `SUPER + SHIFT + 1`…`5` | Send focused window to workspace |
 | `SUPER + scroll` | Cycle workspaces |
 
-Workspaces stop at 5 to match `persistent-workspaces` in `waybar/config` — extend both together
-if you want more. You can also just click the pills in the bar.
+Capped at 5 to match `persistent-workspaces` in `waybar/config` — extend both together if you
+want more. You can also click the pills in the bar.
 
-Still deliberately sparse: there are **no** binds for moving focus between tiled windows, media
-keys, or exiting Hyprland. Add your own in the `bind =` block at the bottom of
-`hypr/hyprland.conf`.
+**Windows**
+
+| Combo | Action |
+| --- | --- |
+| `SUPER + ←↑↓→` or `H/J/K/L` | Move focus |
+| `SUPER + SHIFT + ←↑↓→` | Move window within the layout |
+| `SUPER + CTRL + ←↑↓→` | Resize window |
+| `SUPER + drag` / `SUPER + right-drag` | Move / resize with the mouse |
+
+**Media and screenshots** — these need the optional packages above.
+
+| Combo | Action |
+| --- | --- |
+| `Print` | Whole screen to clipboard |
+| `SUPER + S` | Select a region to clipboard |
+| `SUPER + SHIFT + S` | Select a region to `~/Pictures/Screenshots/` |
+| Volume / mute / mic keys | via `wpctl` |
+| Play / next / previous | via `playerctl` |
+| Brightness keys | via `brightnessctl` |
+
+## The bar is interactive
+
+| Module | Hover | Click |
+| --- | --- | --- |
+| Workspaces | — | Switch to it |
+| Clock | Month calendar | Toggle time ⇄ date |
+| CPU | Usage + load average | — |
+| RAM | Used / total / available | — |
+| Volume | Device + level | Toggle mute (**scroll to adjust**) |
+| Network | SSID, signal, IP | Opens `nmtui` in a floating window |
+| Battery | Charge + time remaining | — |
+
+The clock is 12-hour (`%I:%M %p`). For 24-hour, change it to `{:%H:%M}` in `waybar/config`.
 
 ## Customizing the theme
 
@@ -107,10 +155,16 @@ Written and verified against:
 form:
 
 ```bash
-layerrule = blur on, ignore_alpha 0.3, match:namespace waybar
+layerrule  = blur on, ignore_alpha 0.3, match:namespace waybar
+windowrule = float on, size 60% 60%, center on, match:class nmtui-float
 ```
 
-The pre-0.53 form (`layerrule = blur, waybar`) is rejected outright — `blur` now takes an explicit
-`on`/`off`, `ignorealpha` became `ignore_alpha`, and targets are matched with `match:`. Most guides
-and dotfile repos online still show the old syntax. If a rule seems to do nothing, check
-`hyprctl configerrors`.
+The pre-0.53 forms (`layerrule = blur, waybar` and `windowrule = float, class:foo`) are rejected
+outright. Three things changed:
+
+- boolean rules take an explicit value — `blur on`, `float on`, not bare `blur`/`float`
+- `ignorealpha` became `ignore_alpha`
+- targets are matched with `match:` — `match:namespace`, `match:class`
+
+Most guides and dotfile repos still show the old syntax, and a rejected rule doesn't announce
+itself. If a rule seems to do nothing, run `hyprctl configerrors`.

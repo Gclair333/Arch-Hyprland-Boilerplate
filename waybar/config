@@ -25,13 +25,13 @@
 	"cpu": {
 		"format": "󰻠 {usage}%",
 		"interval": 3,
-		"tooltip": false
+		"tooltip-format": "CPU\n{usage}% in use\nLoad average: {load}"
 	},
 
 	"memory": {
 		"format": "󰍛 {percentage}%",
 		"interval": 3,
-		"tooltip-format": "{used:0.1f} GiB / {total:0.1f} GiB"
+		"tooltip-format": "RAM\n{used:0.1f} GiB used of {total:0.1f} GiB ({percentage}%)\n{avail:0.1f} GiB available"
 	},
 
 	"pulseaudio": {
@@ -41,19 +41,25 @@
 			"headphone": "󰋋",
 			"default": ["󰕿", "󰖀", "󰕾"]
 		},
+		// Waybar's own scroll handling updates the readout instantly, which the
+		// old shell-based on-scroll-* handlers did not. smooth-scrolling-threshold
+		// is what makes hi-res touchpad scroll events register at all.
+		"scroll-step": 5,
+		"max-volume": 100,
+		"smooth-scrolling-threshold": 1,
 		"on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
-		"on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+ -l 1.0",
-		"on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
-		"tooltip-format": "{desc}"
+		"tooltip-format": "Volume\n{desc}\n{volume}% - scroll to adjust, click to mute"
 	},
 
 	"network": {
 		"format-wifi": "󰤨 {essid}",
 		"format-ethernet": "󰈀 {ifname}",
 		"format-disconnected": "󰤭 offline",
-		"tooltip-format-wifi": "{essid} · {signalStrength}%\n{ipaddr}",
-		"tooltip-format-ethernet": "{ifname}\n{ipaddr}",
-		"tooltip-format-disconnected": "no connection"
+		// nmtui in a floating kitty window; the float rule lives in hyprland.conf.
+		"on-click": "kitty --class nmtui-float nmtui",
+		"tooltip-format-wifi": "Wi-Fi\n{essid} ({signalStrength}%)\n{ipaddr}\nClick to manage networks",
+		"tooltip-format-ethernet": "Ethernet\n{ifname}\n{ipaddr}\nClick to manage connections",
+		"tooltip-format-disconnected": "Offline\nClick to connect"
 	},
 
 	"battery": {
@@ -65,12 +71,12 @@
 		"format-charging": "󰂄 {capacity}%",
 		"format-plugged": "󰚥 {capacity}%",
 		"format-icons": ["󰁺", "󰁼", "󰁾", "󰂀", "󰂂", "󰁹"],
-		"tooltip-format": "{capacity}% · {timeTo}"
+		"tooltip-format": "Battery\n{capacity}% - {timeTo}"
 	},
 
 	"clock": {
 		// Left-click toggles between time and date.
-		"format": "󰥔 {:%H:%M}",
+		"format": "󰥔 {:%I:%M %p}",
 		"format-alt": "󰃭 {:%a %d %b}",
 		"tooltip-format": "<tt>{calendar}</tt>"
 	}
