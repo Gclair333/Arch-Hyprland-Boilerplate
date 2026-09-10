@@ -4,6 +4,10 @@ A deliberately minimal [Hyprland](https://hyprland.org/) setup for Arch Linux, t
 [Catppuccin Mocha](https://catppuccin.com/palette). Small enough to read top to bottom in a
 few minutes, then build on — not a full rice.
 
+![The bar on an empty workspace](assets/desktop.jpg)
+
+<sub>Wallpaper not included. The network name in the bar is blurred in this shot.</sub>
+
 ## What's here
 
 - **Hyprland** — rounded corners, blur, shadows, and two custom animation curves
