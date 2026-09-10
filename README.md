@@ -103,12 +103,17 @@ want more. You can also click the pills in the bar.
 | `SUPER + CTRL + ←↑↓→` | Resize window |
 | `SUPER + drag` / `SUPER + right-drag` | Move / resize with the mouse |
 | `SUPER + M` | Stash the focused window (hide without closing) |
-| `SUPER + SHIFT + M` | Show / hide the stash |
+| `SUPER + SHIFT + M` | Show / hide the stash (overlaid on the current workspace) |
+| `SUPER + CTRL + M` | Pull the focused window out of the stash onto the current workspace |
 
-Hyprland has no minimize. `SUPER + M` sends a window to the **special workspace** (a scratchpad);
-`SUPER + SHIFT + M` toggles that workspace into view over whatever you're on. Multiple stashed
-windows tile together. A minimize glyph appears in the bar's workspace list whenever something is
-stashed — that's your only cue it's there, so the reveal bind is worth remembering.
+Hyprland has no minimize. `SUPER + M` sends a window to the **special workspace** (a scratchpad).
+`SUPER + SHIFT + M` toggles that workspace into view *over* whatever you're on — the stashed
+windows float above your layout, they don't join it. To put one back into the tiling layout
+beside your open windows: reveal the stash, focus the window you want (`SUPER + arrow` or click),
+then `SUPER + CTRL + M`. Repeat to empty the stash entirely.
+
+Multiple stashed windows tile among themselves while revealed. A minimize glyph appears in the
+bar's workspace list whenever anything is stashed — that's your only cue it's there.
 
 **Media and screenshots** — the screenshot keys need `grim`/`slurp`/`wl-clipboard` (in the core
 deps line); the rest need the optional packages above.
