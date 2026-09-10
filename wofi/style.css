@@ -1,0 +1,75 @@
+/* Catppuccin Mocha — wofi
+ * The window is transparent and #outer-box carries the visible panel, so the
+ * rounded corners actually render instead of sitting on a square backdrop. */
+
+@define-color base     #1e1e2e;
+@define-color surface0 #313244;
+@define-color surface1 #45475a;
+@define-color overlay0 #6c7086;
+@define-color text     #cdd6f4;
+@define-color mauve    #cba6f7;
+
+window {
+	background-color: transparent;
+	font-family: "JetBrainsMono Nerd Font";
+	font-size: 13px;
+}
+
+/* Slightly translucent so Hyprland's layer blur shows through. */
+#outer-box {
+	background-color: alpha(@base, 0.94);
+	border: 2px solid @mauve;
+	border-radius: 16px;
+	padding: 12px;
+}
+
+#input {
+	background-color: @surface0;
+	color: @text;
+	caret-color: @mauve;
+	border: 1px solid @surface1;
+	border-radius: 10px;
+	padding: 6px 10px;
+	margin-bottom: 10px;
+}
+
+#input:focus {
+	border-color: @mauve;
+}
+
+#input image {
+	color: @overlay0;
+}
+
+#scroll {
+	margin: 0;
+}
+
+#inner-box {
+	background-color: transparent;
+}
+
+#entry {
+	background-color: transparent;
+	padding: 6px 8px;
+	margin: 1px 0;
+	border-radius: 10px;
+}
+
+#entry:selected {
+	background-color: @surface0;
+}
+
+#entry:selected #text,
+#text:selected {
+	color: @mauve;
+}
+
+#text {
+	color: @text;
+	padding: 0 4px;
+}
+
+#img {
+	margin-right: 8px;
+}

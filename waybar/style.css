@@ -1,0 +1,135 @@
+/* Catppuccin Mocha — Waybar
+ * Floating-pill layout: the bar itself is invisible, each module is its own capsule.
+ * Palette reference: https://catppuccin.com/palette (Mocha) */
+
+@define-color base     #1e1e2e;
+@define-color mantle   #181825;
+@define-color crust    #11111b;
+@define-color surface0 #313244;
+@define-color surface1 #45475a;
+@define-color overlay0 #6c7086;
+@define-color text     #cdd6f4;
+@define-color blue     #89b4fa;
+@define-color lavender #b4befe;
+@define-color sapphire #74c7ec;
+@define-color mauve    #cba6f7;
+@define-color green    #a6e3a1;
+@define-color yellow   #f9e2af;
+@define-color peach    #fab387;
+@define-color red      #f38ba8;
+
+* {
+	font-family: "JetBrainsMono Nerd Font";
+	font-size: 13px;
+	font-weight: 600;
+	border: none;
+	border-radius: 0;
+	min-height: 0;
+	padding: 0;
+	margin: 0;
+}
+
+/* Invisible bar — the pills below supply all the visible surface. */
+window#waybar {
+	background: transparent;
+}
+
+/* ---- shared pill shape ---- */
+#workspaces,
+#clock,
+#cpu,
+#memory,
+#pulseaudio,
+#network,
+#battery {
+	/* Slightly translucent so Hyprland's layer blur shows through. */
+	background-color: alpha(@base, 0.88);
+	color: @text;
+	padding: 2px 12px;
+	margin: 0 3px;
+	border: 1px solid @surface0;
+	border-radius: 14px;
+}
+
+/* ---- workspaces ---- */
+#workspaces {
+	padding: 2px 4px;
+}
+
+#workspaces button {
+	color: @overlay0;
+	background: transparent;
+	padding: 0 8px;
+	margin: 2px 1px;
+	border-radius: 10px;
+	transition: all 200ms ease;
+}
+
+#workspaces button:hover {
+	color: @text;
+	background-color: @surface0;
+	/* GTK paints an inset shadow on hover by default — cancel it. */
+	box-shadow: none;
+	text-shadow: none;
+}
+
+#workspaces button.active {
+	color: @crust;
+	background-color: @mauve;
+	padding: 0 14px; /* the active pill widens, readable at a glance */
+}
+
+#workspaces button.urgent {
+	color: @crust;
+	background-color: @red;
+}
+
+/* ---- center ---- */
+#clock {
+	color: @lavender;
+	padding: 2px 16px;
+}
+
+/* ---- right cluster: one accent per module ---- */
+#cpu        { color: @green; }
+#memory     { color: @yellow; }
+#pulseaudio { color: @mauve; }
+#network    { color: @sapphire; }
+#battery    { color: @blue; }
+
+#pulseaudio.muted,
+#network.disconnected {
+	color: @overlay0;
+}
+
+#battery.charging,
+#battery.plugged {
+	color: @green;
+}
+
+#battery.warning:not(.charging) {
+	color: @peach;
+}
+
+#battery.critical:not(.charging) {
+	color: @red;
+	border-color: @red;
+	animation: battery-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes battery-pulse {
+	from { background-color: alpha(@base, 0.88); }
+	to   { background-color: @surface0; }
+}
+
+/* ---- tooltips ---- */
+tooltip {
+	background-color: @mantle;
+	border: 1px solid @surface1;
+	border-radius: 10px;
+}
+
+tooltip label {
+	color: @text;
+	padding: 4px;
+}

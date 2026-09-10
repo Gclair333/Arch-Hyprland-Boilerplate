@@ -1,0 +1,8 @@
+# Editor / OS noise
+*~
+.DS_Store
+
+# Never commit config backups — easy to create by accident while tweaking
+*.bak
+*.bak-*
+*.old
