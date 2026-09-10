@@ -12,6 +12,7 @@
 @define-color blue     #89b4fa;
 @define-color lavender #b4befe;
 @define-color sapphire #74c7ec;
+@define-color teal     #94e2d5;
 @define-color mauve    #cba6f7;
 @define-color green    #a6e3a1;
 @define-color yellow   #f9e2af;
@@ -34,12 +35,15 @@ window#waybar {
 	background: transparent;
 }
 
-/* ---- shared pill shape ---- */
+/* ---- shared pill shape ----
+ * #brightness and #volume are group boxes (leader + hidden slider); they carry
+ * the pill so the slider lives inside the same capsule when it reveals. */
 #workspaces,
 #clock,
 #cpu,
 #memory,
-#pulseaudio,
+#brightness,
+#volume,
 #network,
 #battery {
 	/* Slightly translucent so Hyprland's layer blur shows through. */
@@ -49,6 +53,18 @@ window#waybar {
 	margin: 0 3px;
 	border: 1px solid @surface0;
 	border-radius: 14px;
+}
+
+/* The modules nested in the groups have no pill of their own. */
+#brightness,
+#volume {
+	padding: 2px 8px;
+}
+
+#brightness #backlight,
+#volume #pulseaudio {
+	background: transparent;
+	border: none;
 }
 
 /* ---- workspaces ---- */
@@ -93,6 +109,7 @@ window#waybar {
 /* ---- right cluster: one accent per module ---- */
 #cpu        { color: @green; }
 #memory     { color: @yellow; }
+#backlight  { color: @teal; }
 #pulseaudio { color: @mauve; }
 #network    { color: @sapphire; }
 #battery    { color: @blue; }
@@ -100,6 +117,51 @@ window#waybar {
 #pulseaudio.muted,
 #network.disconnected {
 	color: @overlay0;
+}
+
+/* ---- drag sliders (revealed by clicking the brightness / volume pill) ---- */
+#backlight-slider,
+#pulseaudio-slider {
+	/* the slider box: give the revealed bar some room */
+	min-width: 90px;
+	margin: 0 4px 0 8px;
+	padding: 0;
+}
+
+#backlight-slider slider,
+#pulseaudio-slider slider {
+	/* the draggable handle */
+	min-width: 12px;
+	min-height: 12px;
+	border-radius: 50%;
+	background-color: @text;
+	box-shadow: none;
+	border: none;
+}
+
+#backlight-slider trough,
+#pulseaudio-slider trough {
+	/* unfilled track */
+	min-height: 6px;
+	border-radius: 3px;
+	background-color: @surface1;
+}
+
+#backlight-slider highlight {
+	min-height: 6px;
+	border-radius: 3px;
+	background-color: @teal;
+}
+
+#pulseaudio-slider highlight {
+	min-height: 6px;
+	border-radius: 3px;
+	background-color: @mauve;
+}
+
+/* Fade the slider while it's the hidden drawer child. */
+.drawer-child {
+	transition: opacity 300ms ease, min-width 300ms ease;
 }
 
 #battery.charging,

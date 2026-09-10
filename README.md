@@ -113,11 +113,18 @@ want more. You can also click the pills in the bar.
 | Clock | Month calendar | Toggle time ⇄ date |
 | CPU | Usage + load average | — |
 | RAM | Used / total / available | — |
-| Volume | Device + level | Toggle mute (**scroll to adjust**) |
+| Brightness | Level | **Slides out a drag bar** (scroll also works) |
+| Volume | Device + level | **Slides out a drag bar**; right-click mutes (scroll also works) |
 | Network | SSID, signal, IP | Opens `nmtui` in a floating window |
 | Battery | Charge + time remaining | — |
 
-The clock is 12-hour (`%I:%M %p`). For 24-hour, change it to `{:%H:%M}` in `waybar/config`.
+Brightness and volume use Waybar's native `backlight/slider` and `pulseaudio/slider` inside a
+click-to-reveal `group` drawer. Both write through system APIs Waybar is already linked against
+(logind for brightness, PipeWire for volume) — **no `brightnessctl`, `wpctl`, or `video` group
+needed** for the bar. Those tools are still listed as optional because the *keybindings* use them.
+
+The brightness slider floors at 5% so a full drag left can't black out the screen. The clock is
+12-hour (`%I:%M %p`) — change it to `{:%H:%M}` in `waybar/config` for 24-hour.
 
 ## Customizing the theme
 

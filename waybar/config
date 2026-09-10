@@ -11,7 +11,7 @@
 
 	"modules-left": ["hyprland/workspaces"],
 	"modules-center": ["clock"],
-	"modules-right": ["cpu", "memory", "pulseaudio", "network", "battery"],
+	"modules-right": ["cpu", "memory", "group/brightness", "group/volume", "network", "battery"],
 
 	"hyprland/workspaces": {
 		// Swap to "{icon}" plus a format-icons map if you want glyphs instead of numbers.
@@ -34,6 +34,47 @@
 		"tooltip-format": "RAM\n{used:0.1f} GiB used of {total:0.1f} GiB ({percentage}%)\n{avail:0.1f} GiB available"
 	},
 
+	// --- brightness: click the pill to slide out a drag bar ---
+	// The leader (icon + %) is always visible; left-click reveals the slider.
+	// Waybar writes brightness through logind, so no brightnessctl or video
+	// group is needed. Scroll on the leader still works as a shortcut.
+	"group/brightness": {
+		"orientation": "horizontal",
+		"drawer": {
+			"transition-duration": 300,
+			"children-class": "drawer-child",
+			"click-to-reveal": true
+		},
+		"modules": ["backlight", "backlight/slider"]
+	},
+
+	"backlight": {
+		"format": "{icon} {percent}%",
+		"format-icons": ["󰃞", "󰃟", "󰃠"],
+		"scroll-step": 5,
+		"tooltip-format": "Brightness\n{percent}%\nClick for slider, scroll to adjust"
+	},
+
+	"backlight/slider": {
+		"min": 5,
+		"max": 100,
+		"orientation": "horizontal",
+		"device": "intel_backlight"
+	},
+
+	// --- volume: same pattern ---
+	// Left-click reveals the slider; right-click toggles mute. Volume is set
+	// through the PipeWire/PulseAudio API directly, no wpctl needed.
+	"group/volume": {
+		"orientation": "horizontal",
+		"drawer": {
+			"transition-duration": 300,
+			"children-class": "drawer-child",
+			"click-to-reveal": true
+		},
+		"modules": ["pulseaudio", "pulseaudio/slider"]
+	},
+
 	"pulseaudio": {
 		"format": "{icon} {volume}%",
 		"format-muted": "󰝟 muted",
@@ -41,14 +82,17 @@
 			"headphone": "󰋋",
 			"default": ["󰕿", "󰖀", "󰕾"]
 		},
-		// Waybar's own scroll handling updates the readout instantly, which the
-		// old shell-based on-scroll-* handlers did not. smooth-scrolling-threshold
-		// is what makes hi-res touchpad scroll events register at all.
 		"scroll-step": 5,
 		"max-volume": 100,
 		"smooth-scrolling-threshold": 1,
-		"on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
-		"tooltip-format": "Volume\n{desc}\n{volume}% - scroll to adjust, click to mute"
+		"on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+		"tooltip-format": "Volume\n{desc}\n{volume}% - click for slider, right-click to mute"
+	},
+
+	"pulseaudio/slider": {
+		"min": 0,
+		"max": 100,
+		"orientation": "horizontal"
 	},
 
 	"network": {
