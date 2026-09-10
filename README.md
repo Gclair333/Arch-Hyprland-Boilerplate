@@ -24,8 +24,11 @@ scripts/wifi-menu.sh   wofi + nmcli Wi-Fi picker, opened by the network pill
 ## Dependencies
 
 ```bash
-sudo pacman -S hyprland waybar wofi kitty awww ttf-jetbrains-mono-nerd
+sudo pacman -S hyprland waybar wofi kitty awww ttf-jetbrains-mono-nerd grim slurp wl-clipboard
 ```
+
+`grim` + `slurp` + `wl-clipboard` back the screenshot binds and `scripts/screenshot.sh` —
+core here because a screenshot key is table stakes for a usable desktop.
 
 The Waybar volume module and the volume keys use `wpctl`, so it also expects PipeWire:
 
@@ -40,7 +43,6 @@ inert until the matching tool is present.
 
 ```bash
 sudo pacman -S networkmanager            # Wi-Fi picker on the network pill (nmcli)
-sudo pacman -S grim slurp wl-clipboard   # screenshot binds + scripts/screenshot.sh
 sudo pacman -S playerctl                 # play/pause/next/prev media keys
 sudo pacman -S brightnessctl             # brightness keys (the bar slider needs nothing)
 ```
