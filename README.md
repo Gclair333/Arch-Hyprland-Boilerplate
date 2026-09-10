@@ -102,8 +102,16 @@ want more. You can also click the pills in the bar.
 | `SUPER + SHIFT + ←↑↓→` | Move window within the layout |
 | `SUPER + CTRL + ←↑↓→` | Resize window |
 | `SUPER + drag` / `SUPER + right-drag` | Move / resize with the mouse |
+| `SUPER + M` | Stash the focused window (hide without closing) |
+| `SUPER + SHIFT + M` | Show / hide the stash |
 
-**Media and screenshots** — these need the optional packages above.
+Hyprland has no minimize. `SUPER + M` sends a window to the **special workspace** (a scratchpad);
+`SUPER + SHIFT + M` toggles that workspace into view over whatever you're on. Multiple stashed
+windows tile together. A minimize glyph appears in the bar's workspace list whenever something is
+stashed — that's your only cue it's there, so the reveal bind is worth remembering.
+
+**Media and screenshots** — the screenshot keys need `grim`/`slurp`/`wl-clipboard` (in the core
+deps line); the rest need the optional packages above.
 
 | Combo | Action |
 | --- | --- |

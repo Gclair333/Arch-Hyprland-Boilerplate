@@ -14,8 +14,19 @@
 	"modules-right": ["cpu", "memory", "group/brightness", "group/volume", "network", "battery"],
 
 	"hyprland/workspaces": {
-		// Swap to "{icon}" plus a format-icons map if you want glyphs instead of numbers.
-		"format": "{name}",
+		// {icon} maps each name through format-icons; numbers stay numbers, and
+		// the special (scratchpad) workspace shows a minimize glyph when it
+		// holds a stashed window.
+		"format": "{icon}",
+		"format-icons": {
+			"1": "1",
+			"2": "2",
+			"3": "3",
+			"4": "4",
+			"5": "5",
+			"special": "󰛐"
+		},
+		"show-special": true,
 		"on-click": "activate",
 		"persistent-workspaces": {
 			"*": 5

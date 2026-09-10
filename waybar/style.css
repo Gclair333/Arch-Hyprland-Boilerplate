@@ -106,6 +106,16 @@ window#waybar {
 	background-color: @red;
 }
 
+/* The scratchpad button only appears when a window is stashed there. */
+#workspaces button.special {
+	color: @teal;
+}
+
+#workspaces button.special.active {
+	color: @crust;
+	background-color: @teal;
+}
+
 /* ---- center ---- */
 #clock {
 	color: @lavender;
