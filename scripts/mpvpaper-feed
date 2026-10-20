@@ -30,12 +30,17 @@ log() { printf 'mpvpaper-feed: %s\n' "$1" >&2; }
 
 # --- parse ani-cli's argv -------------------------------------------------
 # The URL is always the LAST argument. Everything before it is flags we either
-# consume (--force-media-title) or ignore (ani-skip chapter flags).
+# consume (--force-media-title, --referrer, --sub-file) or ignore (ani-skip
+# chapter flags).
 url=""
 media_title=""
+referrer=""
+subs=""
 for a in "$@"; do
     case "$a" in
         --force-media-title=*) media_title="${a#--force-media-title=}" ;;
+        --referrer=*)          referrer="${a#--referrer=}" ;;
+        --sub-file=*)          subs="${a#--sub-file=}" ;;
     esac
     url="$a"
 done
@@ -96,6 +101,13 @@ trap 'save_position; exit 0' INT TERM
 "$IPC" set aid '"auto"'
 "$IPC" set mute 'false'
 "$IPC" set loop-file '"no"'    # an episode must end, or eof-reached never fires
+
+# ani-cli 5.1's hianime provider passes --referrer, and its stream host answers
+# 403 without one, playlist and subtitles alike. It has to be set before
+# loadfile: mpv only applies it to requests made after it changes. Set it even
+# when empty, so one provider's referrer can't leak into the next stream.
+"$IPC" set referrer "$(jq -nc --arg r "$referrer" '$r')"
+
 "$IPC" load "$url"             # loadfile + the mandatory unpause
 
 # Wait for the stream to actually open. Network sources take noticeably longer
@@ -111,13 +123,36 @@ until [ -n "$("$IPC" get filename 2>/dev/null)" ]; do
     sleep 1
 done
 
+# Subtitles arrive as a separate file, not inside the stream. Add them only once
+# the new file is open: any earlier and they'd attach to the outgoing one.
+[ -n "$subs" ] && "$IPC" raw "$(jq -nc --arg s "$subs" '{command:["sub-add",$s]}')" >/dev/null
+
+# "filename" is set the instant loadfile is issued, but an HLS playlist isn't
+# parsed yet at that point: a seek issued now is accepted and silently dropped,
+# and the resume looks like it never happened. Wait for seekable first.
+if [ -n "${MPVPAPER_RESUME_AT:-}" ] && [ "${MPVPAPER_RESUME_AT}" != "0" ]; then
+    i=0
+    until [ "$("$IPC" get seekable 2>/dev/null)" = "true" ]; do
+        i=$((i + 1))
+        if [ "$i" -ge "${MPVPAPER_SEEK_TIMEOUT:-30}" ]; then
+            log "stream never reported seekable — playing from the start"
+            break
+        fi
+        sleep 1
+    done
+fi
+
 # Resume mid-episode if we were asked to (plan §7.3). Cleared afterwards so the
 # *next* episode in a range starts from zero rather than re-seeking.
 # ani-cli's -S 1 trusts search-result ordering, which can shift between sessions.
 # Resuming into the WRONG show at minute 14 would be worse than starting over, so
 # only seek when the title ani-cli actually matched is the one we asked for.
+# Titles are compared without case or punctuation: providers spell the same show
+# differently ("Steinsgate" vs "Steins;Gate"), and the check only exists to catch
+# a *different* show ("Steins;Gate 0"), which this still does.
+norm() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]'; }
 if [ -n "${MPVPAPER_RESUME_AT:-}" ]; then
-    if [ -n "${MPVPAPER_EXPECT_TITLE:-}" ] && [ "$MPVPAPER_EXPECT_TITLE" != "$anime_title" ]; then
+    if [ -n "${MPVPAPER_EXPECT_TITLE:-}" ] && [ "$(norm "$MPVPAPER_EXPECT_TITLE")" != "$(norm "$anime_title")" ]; then
         log "expected '$MPVPAPER_EXPECT_TITLE' but ani-cli matched '$anime_title' — starting from the beginning instead of seeking"
     else
         "$IPC" seek "$MPVPAPER_RESUME_AT"

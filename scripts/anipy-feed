@@ -161,8 +161,11 @@ if [ -n "${MPVPAPER_RESUME_AT:-}" ] && [ "${MPVPAPER_RESUME_AT}" != "0" ]; then
     done
 fi
 
+# Same punctuation-blind comparison as mpvpaper-feed: providers spell one show
+# several ways, and only a genuinely different title should block the seek.
+norm() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]'; }
 if [ -n "${MPVPAPER_RESUME_AT:-}" ]; then
-    if [ -n "${MPVPAPER_EXPECT_TITLE:-}" ] && [ "$MPVPAPER_EXPECT_TITLE" != "$anime_title" ]; then
+    if [ -n "${MPVPAPER_EXPECT_TITLE:-}" ] && [ "$(norm "$MPVPAPER_EXPECT_TITLE")" != "$(norm "$anime_title")" ]; then
         log "expected '$MPVPAPER_EXPECT_TITLE' but anipy-cli matched '$anime_title' — starting from the beginning instead of seeking"
     else
         "$IPC" seek "$MPVPAPER_RESUME_AT"
