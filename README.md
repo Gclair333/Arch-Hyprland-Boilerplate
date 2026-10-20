@@ -28,8 +28,7 @@ Optional:
 - **[Video wallpaper](#video-wallpaper-optional)** — [mpvpaper](https://github.com/GhostNaN/mpvpaper)
   loops a video behind your windows, with the static image as an automatic fallback
 - **[Anime on the wallpaper](#anime-on-the-wallpaper-optional)** — episodes play as the desktop
-  background, auto-advance through a range, and resume where you stopped (no working source as of
-  October 2026 — see the status note)
+  background, with subtitles, auto-advancing through a range and resuming where you stopped
 
 ```
 hypr/hyprland.conf            compositor: monitors, decoration, animations, binds
@@ -47,10 +46,10 @@ scripts/wallpaper-start       bring up the video wallpaper (mpvpaper)
 scripts/mpvpaper-ipc          talk to it over mpv's JSON IPC socket
 scripts/wallpaper-audio       mute the wallpaper only — the bar toggle and SUPER+SHIFT+A
 scripts/wallpaper-lock-watch  pause the wallpaper while locked or asleep
-scripts/watch-anime-anipy     play anime on the wallpaper through anipy-cli
-scripts/anipy-feed            ...its player shim (anipy-player/mpv links to it)
-scripts/watch-anime           the same, through ani-cli
+scripts/watch-anime           play anime on the wallpaper through ani-cli
 scripts/mpvpaper-feed         ...its player shim
+scripts/watch-anime-anipy     the same, through anipy-cli
+scripts/anipy-feed            ...its player shim (anipy-player/mpv links to it)
 scripts/wallpaper-resume      pick the last episode back up where it stopped
 anipy-wallpaper/              anipy-cli config used only in wallpaper mode
 ```
@@ -174,7 +173,7 @@ through mpv's IPC socket instead. They do nothing when mpvpaper isn't running.
 | `SUPER + P` | Pause / resume the wallpaper |
 | `SUPER + [` / `SUPER + ]` | Seek back / forward 10 seconds |
 | `SUPER + SHIFT + A` | Mute / unmute the wallpaper only, not the whole system |
-| `SUPER + A` | Pick an anime to play on the wallpaper (anipy-cli, in kitty) |
+| `SUPER + A` | Pick an anime to play on the wallpaper (ani-cli, in kitty) |
 | `SUPER + R` | Resume the last episode where it stopped |
 
 ## The bar is interactive
@@ -288,18 +287,40 @@ won't help, because mpv still considers itself playing.
 
 ## Anime on the wallpaper (optional)
 
-> **Status, October 2026: no working source.** animehub, the site anipy-cli pulls episodes from
-> here, changed its video player in a way anipy-cli 3.10.x can't read — search and episode lists
-> still work, then every episode fails to load. ani-cli 5.x's only source (anidb.app) has been
-> down since September 2026. The wallpaper side is unaffected: these scripts play any stream URL
-> or local file they're handed.
+```bash
+yay -S ani-cli        # 5.1 or newer — 5.0 points at a site that's gone
+```
 
-Neither anipy-cli nor ani-cli needs to open a window of its own. Both let you choose the "player",
-and the shims here (`scripts/anipy-feed`, `scripts/mpvpaper-feed`) pass each episode's stream to
+Neither ani-cli nor anipy-cli needs to open a window of its own. Both let you choose the "player",
+and the shims here (`scripts/mpvpaper-feed`, `scripts/anipy-feed`) pass each episode's stream to
 the mpvpaper that's already running, then wait until it ends. Both tools wait for the player before
 starting the next episode, so playing a range auto-advances with no extra glue.
 
-anipy-cli isn't packaged for Arch. A private venv keeps it off the system Python:
+```bash
+watch-anime                          # pick interactively — what SUPER + A opens
+watch-anime -e 1 "steins gate"       # one episode, straight in
+watch-anime -e 1-12 "frieren"        # a range, auto-advancing
+watch-anime -c                       # carry on from ani-cli's history
+```
+
+Episodes play with sound and subtitles. `SUPER + SHIFT + A`, or the teal button in the volume
+drawer, mutes just the wallpaper. When you quit, the ambient video comes back.
+
+**Resume.** The shim saves the show, episode, and position every 5 seconds to
+`~/.local/state/mpvpaper-ani/resume.json` — often enough that even a hard power-off loses only a
+few seconds. `SUPER + R` (`scripts/wallpaper-resume`) picks it back up: a half-watched episode
+resumes at the saved spot, and a finished one moves on to the next. Stream links expire, so
+resuming searches for the show again and then seeks; if the search lands on a different title, it
+starts from the beginning instead of seeking into the wrong show. `wallpaper-resume --status`
+shows what it would do without playing anything.
+
+`hyprland.conf` also has a commented-out `exec-once` that resumes automatically 10 seconds after
+login, landing paused and muted. Uncomment it once `SUPER + R` works by hand.
+
+**anipy-cli** is the alternate route, through `watch-anime-anipy` / `anipy-feed`. Nothing points
+at it by default: as of October 2026 its provider (animehub) no longer resolves streams.
+`MPVPAPER_ANIME_TOOL=anipy-cli` makes `wallpaper-resume` use it. It isn't packaged for Arch; a
+private venv keeps it off the system Python:
 
 ```bash
 python -m venv ~/.local/share/anipy-venv
@@ -311,29 +332,10 @@ ln -s ~/.local/share/anipy-venv/bin/anipy-cli ~/.local/bin/anipy-cli
 `anipy-cli` still plays in a normal mpv window. That config only sets two things (the shim as the
 player, and the provider); anipy-cli fills in everything else on its first run.
 
-```bash
-watch-anime-anipy                               # pick interactively — what SUPER + A opens
-watch-anime-anipy -s "steins gate:1:sub"        # one episode, straight in
-watch-anime-anipy -B -s "frieren:1-12:sub"      # binge a range, auto-advancing
-```
-
-Episodes play with sound. `SUPER + SHIFT + A`, or the teal button in the volume drawer, mutes just
-the wallpaper. When you quit, the ambient video comes back.
-
-**Resume.** The shim saves the show, episode, and position every 5 seconds to
-`~/.local/state/mpvpaper-ani/resume.json` — often enough that even a hard power-off loses only a
-few seconds. `SUPER + R` (`scripts/wallpaper-resume`) picks it back up: a half-watched episode
-resumes at the saved spot, and a finished one moves on to the next. Stream links expire, so
-resuming searches for the show again and then seeks; if the search lands on a different title, it
-starts from the beginning instead of seeking into the wrong show. `wallpaper-resume --status`
-shows what it would do without playing anything.
-
-`hyprland.conf` also has a commented-out `exec-once` that resumes automatically 10 seconds after
-login, landing paused and muted. It's off for now: with no working source it would only fail at
-every login.
-
-`watch-anime` and `mpvpaper-feed` are the same pair for [ani-cli](https://github.com/pystardust/ani-cli)
-(`yay -S ani-cli`), kept in case its source comes back.
+**Sources come and go.** Both tools read streaming sites, which change without warning — in
+September and October 2026 alone, ani-cli 5.0's only source went offline (5.1 replaced it) and
+anipy-cli's stopped working. When episodes stop loading, check the tool's issue tracker and update
+it before debugging the wallpaper: the scripts here play any stream they're handed.
 
 Comments in the wallpaper scripts cite sections of the author's planning notes ("plan §7.2").
 Those notes aren't part of this repo; the reasoning that matters is written out in each comment.
@@ -376,6 +378,7 @@ Written and verified against:
 | hypridle | 0.1.8 |
 | mpvpaper | 1.9 |
 | mpv | 0.41.0 |
+| ani-cli | 5.1 |
 | anipy-cli | 3.10.0 |
 
 **Hyprland 0.53 overhauled window and layer rule syntax.** The layer rules here use the current

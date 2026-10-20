@@ -5,8 +5,10 @@
 #   wallpaper-resume --status   say what's resumable and exit; no playback
 #   wallpaper-resume --auto     login mode: quiet, and lands PAUSED + MUTED
 #
-# --auto exists because the saved stream URL is worthless — anipy-cli's links are
-# short-lived and host-signed (plan §7.1) — so resuming means re-running anipy-cli,
+#   MPVPAPER_ANIME_TOOL=anipy-cli   search with anipy-cli instead of ani-cli
+#
+# --auto exists because the saved stream URL is worthless — stream links are
+# short-lived and host-signed (plan §7.1) — so resuming means searching again,
 # a live network scrape taking several seconds. Two things make that safe at
 # login: the exec-once line delays it so it isn't racing session startup, and
 # --auto hands the shim MPVPAPER_START_PAUSED so it parks on the resumed frame
@@ -85,19 +87,36 @@ fi
 START_PAUSED=0
 [ "$AUTO" = 1 ] && [ "${MPVPAPER_AUTORESUME_PLAY:-0}" != "1" ] && START_PAUSED=1
 
-# anipy-cli's -s takes results[0] without prompting (parse_auto_search), so this
-# stays non-interactive — the same job ani-cli's -S 1 used to do here.
-#
-# The query is truncated at the first colon: -s splits its argument on ":" to get
-# query:episode:type, so a title like "Frieren: Beyond Journey's End" would
-# otherwise be read as query="Frieren", episode=" Beyond Journey's End". Search is
-# fuzzy enough that the stem still matches, and anipy-feed still cross-checks
-# MPVPAPER_EXPECT_TITLE against what anipy-cli actually picked, so a stem that
-# matches the WRONG show refuses to seek rather than resuming into it blind.
-#
-# The type field is left off so anipy-cli falls back to preferred_type from config.
-query="${title%%:*}"
-MPVPAPER_RESUME_AT="$resume_at" \
-MPVPAPER_EXPECT_TITLE="$title" \
-MPVPAPER_START_PAUSED="$START_PAUSED" \
-    exec "$SELF_DIR/watch-anime-anipy" -s "$query:$next_ep"
+export MPVPAPER_RESUME_AT="$resume_at" \
+       MPVPAPER_EXPECT_TITLE="$title" \
+       MPVPAPER_START_PAUSED="$START_PAUSED"
+
+# Which tool re-resolves the episode. Both shims write the same resume.json, so
+# this only decides who does the search. ani-cli again since 2026-10-20: 5.1's
+# hianime provider works, while anipy-cli's animehub stopped resolving streams.
+case "${MPVPAPER_ANIME_TOOL:-ani-cli}" in
+    ani-cli)
+        # -S 1 takes the first search result without prompting. mpvpaper-feed
+        # still checks the title ani-cli actually matched, so a first result
+        # that's a different show plays from the start instead of seeking.
+        exec "$SELF_DIR/watch-anime" -S 1 -e "$next_ep" "$title"
+        ;;
+    anipy-cli)
+        # anipy-cli's -s takes results[0] without prompting (parse_auto_search),
+        # so this stays non-interactive.
+        #
+        # The query is truncated at the first colon: -s splits its argument on
+        # ":" to get query:episode:type, so a title like "Frieren: Beyond
+        # Journey's End" would otherwise be read as query="Frieren",
+        # episode=" Beyond Journey's End". Search is fuzzy enough that the stem
+        # still matches, and anipy-feed still cross-checks the title anipy-cli
+        # actually picked, so a stem that matches the WRONG show refuses to seek.
+        #
+        # The type field is left off so anipy-cli falls back to preferred_type.
+        query="${title%%:*}"
+        exec "$SELF_DIR/watch-anime-anipy" -s "$query:$next_ep"
+        ;;
+    *)
+        die "unknown MPVPAPER_ANIME_TOOL '${MPVPAPER_ANIME_TOOL}' (ani-cli or anipy-cli)"
+        ;;
+esac

@@ -18,7 +18,7 @@ or ricing in general, here's a map of what lives where and how to actually poke 
 | `~/.config/hypr/hyprlock.conf` | The lock screen's look: background, clock, password field. |
 | `~/.config/hypr/hypridle.conf` | What happens when you stop touching the machine, and after how long: dim, lock, screen off. |
 | `~/.config/scripts/wallpaper-*`, `mpvpaper-ipc` | The optional video wallpaper. `wallpaper-start` launches it, `mpvpaper-ipc` talks to it while it runs, and the rest build on that. The comments explain *why* each mpv option is there — several were found the hard way. |
-| `~/.config/scripts/watch-anime*`, `*-feed` | The optional anime-on-the-wallpaper layer. `anipy-feed` is the interesting one: a fake "player" that hands the stream to the wallpaper instead of opening a window. |
+| `~/.config/scripts/watch-anime*`, `*-feed` | The optional anime-on-the-wallpaper layer. `mpvpaper-feed` is the interesting one: a fake "player" that hands the stream to the wallpaper instead of opening a window. |
 
 None of these need a GUI editor to open. `wofi`'s launcher (`SUPER + D`) only lists installed
 *applications* — it can't open a file by name. From a terminal: `nano <path>` to edit,
