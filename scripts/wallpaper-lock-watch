@@ -1,0 +1,79 @@
+#!/bin/sh
+# wallpaper-lock-watch — pause the video wallpaper on lock/suspend, resume after.
+#
+# Started from hyprland.conf's exec-once; runs for the life of the session.
+#
+# Why logind D-Bus and not a wrapper around the lock command:
+#   A wrapper (`pause; hyprlock; resume`) only catches locks *you* start. It
+#   misses `loginctl lock-session`, and it misses idle-triggered locks from
+#   hypridle — which is how a lock screen actually fires most of the time.
+#   Every one of those paths goes through logind, so that's the right layer.
+#
+# Why not mpvpaper's own -p/--auto-pause:
+#   -p pauses whenever the wallpaper is *hidden*, which includes "any window is
+#   in front of it". Right for an ambient loop, actively wrong mid-episode — the
+#   show would pause every time you opened a terminal (plan §8.2).
+#
+# Signals handled:
+#   Session   Lock / Unlock        -> screen locked / unlocked
+#   Manager   PrepareForSleep b    -> true = going to sleep, false = waking
+#
+# Pausing on lock also snapshots the episode position, because a lock is very
+# often immediately followed by a lid close and a poweroff (plan §7).
+
+set -u
+
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+IPC="$SELF_DIR/mpvpaper-ipc"
+
+# Only un-pause what we paused. Without this, unlocking would start playback
+# that you had deliberately paused with SUPER+P before locking.
+WE_PAUSED=0
+
+log() { [ "${MPVPAPER_LOCK_DEBUG:-0}" = "1" ] && printf 'lock-watch: %s\n' "$1" >&2; }
+
+pause_wallpaper() {
+    [ "$("$IPC" get pause 2>/dev/null)" = "false" ] || { log "already paused or not running"; return; }
+    "$IPC" set pause 'true' 2>/dev/null && WE_PAUSED=1
+    log "paused ($1)"
+}
+
+resume_wallpaper() {
+    [ "$WE_PAUSED" = "1" ] || { log "we didn't pause it; leaving alone"; return; }
+    "$IPC" set pause 'false' 2>/dev/null
+    WE_PAUSED=0
+    log "resumed ($1)"
+}
+
+command -v dbus-monitor >/dev/null 2>&1 || {
+    printf 'wallpaper-lock-watch: dbus-monitor not found\n' >&2; exit 1; }
+
+# PrepareForSleep carries its boolean on the line AFTER the signal header, so
+# the sleep case needs two lines of state rather than one match.
+pending_sleep=0
+
+dbus-monitor --system \
+    "type='signal',interface='org.freedesktop.login1.Session'" \
+    "type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'" \
+    2>/dev/null |
+while IFS= read -r line; do
+    case "$line" in
+        *"member=Lock"*)
+            pending_sleep=0
+            pause_wallpaper "locked"
+            ;;
+        *"member=Unlock"*)
+            pending_sleep=0
+            resume_wallpaper "unlocked"
+            ;;
+        *"member=PrepareForSleep"*)
+            pending_sleep=1
+            ;;
+        *"boolean true"*)
+            [ "$pending_sleep" = "1" ] && { pause_wallpaper "suspending"; pending_sleep=0; }
+            ;;
+        *"boolean false"*)
+            [ "$pending_sleep" = "1" ] && { resume_wallpaper "woke"; pending_sleep=0; }
+            ;;
+    esac
+done
