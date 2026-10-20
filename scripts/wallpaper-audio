@@ -1,0 +1,57 @@
+#!/bin/sh
+# wallpaper-audio — Waybar toggle for the video wallpaper's sound.
+#
+#   wallpaper-audio status   emit JSON for Waybar (text + tooltip + class)
+#   wallpaper-audio toggle   flip the wallpaper's mute
+#
+# This is deliberately separate from the system mute button next to it in the
+# drawer: that one mutes the whole sink, this one mutes only mpvpaper, so an
+# episode can be silenced without killing notification sounds or music.
+#
+# It flips mpv's `mute`, not `aid`. wallpaper-start launches with mute=yes
+# rather than no-audio for exactly this reason — no-audio sets aid=no, leaving
+# no audio track to un-mute at runtime.
+
+set -u
+
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+IPC="$SELF_DIR/mpvpaper-ipc"
+
+ICON="󰍹"   # nf-md-monitor — "the wallpaper", colour carries the on/off state
+
+emit() { # text, tooltip, class
+    printf '{"text":"%s","tooltip":"%s","class":"%s"}\n' "$1" "$2" "$3"
+}
+
+case "${1:-status}" in
+    status)
+        muted=$("$IPC" get mute 2>/dev/null) || {
+            emit "$ICON" "Wallpaper audio\\nWallpaper isn't running" "unavailable"
+            exit 0
+        }
+        if [ "$muted" = "true" ]; then
+            emit "$ICON" "Wallpaper audio: muted\\nClick to unmute" "muted"
+        else
+            # mpv reports volume as a float (100.000000); show it as an integer.
+            vol=$("$IPC" get volume 2>/dev/null)
+            [ -n "$vol" ] && vol=$(printf '%.0f' "$vol" 2>/dev/null)
+            emit "$ICON" "Wallpaper audio: on${vol:+ (${vol}%)}\\nClick to mute" "on"
+        fi
+        ;;
+    toggle)
+        muted=$("$IPC" get mute 2>/dev/null) || exit 0   # wallpaper not running: no-op
+        if [ "$muted" = "true" ]; then
+            "$IPC" set mute 'false'
+            # If the wallpaper was started with no-audio there'd be no track to
+            # unmute; make sure one is selected before declaring victory.
+            "$IPC" set aid '"auto"'
+        else
+            "$IPC" set mute 'true'
+        fi
+        # Waybar re-runs `exec` right after on-click, so the icon updates at once.
+        ;;
+    *)
+        printf 'usage: %s {status|toggle}\n' "${0##*/}" >&2
+        exit 2
+        ;;
+esac

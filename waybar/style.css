@@ -63,7 +63,8 @@ window#waybar {
 
 #brightness #backlight,
 #volume #pulseaudio,
-#volume #custom-mute {
+#volume #custom-mute,
+#volume #custom-wallpaper-audio {
 	background: transparent;
 	border: none;
 }
@@ -71,6 +72,27 @@ window#waybar {
 #volume #custom-mute {
 	color: @mauve;
 	padding: 0 8px;
+}
+
+/* ---- wallpaper audio toggle ----
+ * Sits after the slider in the volume drawer. Teal rather than the sink
+ * mute's mauve, so the two speaker-ish controls in the same capsule don't
+ * read as duplicates: mauve = system volume, teal = the wallpaper. */
+#volume #custom-wallpaper-audio {
+	color: @teal;
+	padding: 0 6px 0 2px;
+	transition: color 200ms ease;
+}
+
+/* Muted: same dimming the bar already uses for #pulseaudio.muted. */
+#volume #custom-wallpaper-audio.muted {
+	color: @overlay0;
+}
+
+/* mpvpaper isn't running — present but clearly inert, so the drawer layout
+ * doesn't jump when the wallpaper starts and stops. */
+#volume #custom-wallpaper-audio.unavailable {
+	color: @surface1;
 }
 
 /* ---- workspaces ---- */

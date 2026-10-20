@@ -87,7 +87,7 @@
 			"children-class": "drawer-child",
 			"click-to-reveal": true
 		},
-		"modules": ["pulseaudio", "custom/mute", "pulseaudio/slider"]
+		"modules": ["pulseaudio", "custom/mute", "pulseaudio/slider", "custom/wallpaper-audio"]
 	},
 
 	"pulseaudio": {
@@ -116,6 +116,18 @@
 		"min": 0,
 		"max": 100,
 		"orientation": "horizontal"
+	},
+
+	// Mutes the video wallpaper only (mpvpaper), not the whole sink — so an
+	// episode can be silenced without killing notification sounds or music.
+	// return-type json lets the script hand back a CSS class, which is what
+	// drives the on / muted / unavailable colours in style.css.
+	"custom/wallpaper-audio": {
+		"exec": "~/.config/scripts/wallpaper-audio status",
+		"return-type": "json",
+		"interval": 3,
+		"on-click": "~/.config/scripts/wallpaper-audio toggle",
+		"tooltip": true
 	},
 
 	"network": {
