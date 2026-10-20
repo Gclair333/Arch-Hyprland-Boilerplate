@@ -1,0 +1,71 @@
+#!/bin/sh
+# wallpaper-start — bring up the mpvpaper video wallpaper with the options the
+# rest of this rice depends on. Idempotent: exits quietly if it's already up.
+#
+# Every option below is load-bearing; see Rice_Notes/Video-Wallpaper-Plan.md:
+#   keep-open=yes          mpvpaper EXITS at EOF without this, taking the
+#                          wallpaper with it. idle=yes alone does not save it.
+#   keep-open-pause=yes    park on the last frame rather than going black
+#   mute=yes               ambient wallpaper is silent; mpvpaper-feed unmutes
+#                          for episodes, and the Waybar toggle flips it. Note
+#                          this is mute, NOT no-audio: no-audio sets aid=no and
+#                          there's then no audio track to unmute at runtime.
+#   loop-file=inf          ambient loops; the shim sets this to "no" per episode
+#   image-display-duration=inf   so a still image works as the ambient source
+#   hwdec=vaapi            verified working here (intel-media-driver + iHD)
+
+set -u
+
+SOCK="${MPVPAPER_SOCKET:-/tmp/mpvpaper.sock}"
+OUTPUT="${MPVPAPER_OUTPUT:-*}"
+
+# MPVPAPER_AUTOPAUSE=1 adds mpvpaper's -p, which pauses playback while the
+# wallpaper is hidden. Measured here: a looping video costs ~11% CPU
+# continuously, a still image ~1%. So this is worth turning on once an actual
+# video wallpaper is in use — but leave it OFF by default, because:
+#   * -p is a LAUNCH flag, not a runtime property, so it can't be toggled for
+#     the duration of an episode. If it fires while you're watching, the show
+#     pauses every time a window covers the wallpaper (plan §8.2).
+#   * with gaps_out=10, a tiled window never fully hides the background, so it
+#     likely only triggers on true fullscreen anyway — unverified here.
+AUTOPAUSE=""
+[ "${MPVPAPER_AUTOPAUSE:-0}" = "1" ] && AUTOPAUSE="-p"
+
+# Ambient source, in order of preference. The still-image fallback means this
+# works before a wallpaper video is ever chosen — it just shows what awww
+# is already showing.
+pick_ambient() {
+    if [ -n "${MPVPAPER_AMBIENT:-}" ] && [ -f "$MPVPAPER_AMBIENT" ]; then
+        printf '%s' "$MPVPAPER_AMBIENT"
+    elif [ -f "$HOME/Videos/wallpaper.mp4" ]; then
+        printf '%s' "$HOME/Videos/wallpaper.mp4"
+    else
+        printf '%s' "$HOME/Pictures/wallpaper.jpg"
+    fi
+}
+
+if [ -S "$SOCK" ] && pgrep -x mpvpaper >/dev/null 2>&1; then
+    [ "${1:-}" = "--quiet" ] || printf 'wallpaper-start: already running\n'
+    exit 0
+fi
+
+# A stale socket left by a crashed instance would make mpvpaper-ipc think the
+# wallpaper is alive.
+rm -f "$SOCK"
+
+AMBIENT=$(pick_ambient)
+[ -f "$AMBIENT" ] || { printf 'wallpaper-start: no ambient source found (%s)\n' "$AMBIENT" >&2; exit 1; }
+
+# shellcheck disable=SC2086  # $AUTOPAUSE is a deliberate word-split flag slot
+mpvpaper -f $AUTOPAUSE -o "mute=yes idle=yes keep-open=yes keep-open-pause=yes loop-file=inf \
+image-display-duration=inf hwdec=vaapi input-ipc-server=$SOCK" "$OUTPUT" "$AMBIENT"
+
+# Wait for the socket so callers can talk to it immediately after this returns.
+i=0
+until [ -S "$SOCK" ]; do
+    i=$((i + 1))
+    [ "$i" -ge 40 ] && { printf 'wallpaper-start: socket never appeared\n' >&2; exit 1; }
+    sleep 0.25
+done
+
+[ "${1:-}" = "--quiet" ] || printf 'wallpaper-start: up on %s (%s)\n' "$OUTPUT" "$AMBIENT"

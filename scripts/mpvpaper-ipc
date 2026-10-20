@@ -1,0 +1,68 @@
+#!/bin/sh
+# mpvpaper-ipc — talk to the running mpvpaper's mpv IPC socket.
+#
+# mpvpaper is just mpv bound to the wallpaper layer, so it exposes the full mpv
+# JSON IPC surface when launched with input-ipc-server=. Everything else in this
+# rice (the ani-cli shim, the lock watcher, transport keybinds) goes through here.
+#
+#   mpvpaper-ipc get  time-pos          -> prints the value, or empty if unset
+#   mpvpaper-ipc set  pause true        -> value must be valid JSON (true/1/"x")
+#   mpvpaper-ipc load <url|path>        -> loadfile + the mandatory unpause
+#   mpvpaper-ipc seek <secs> [rel|abs]  -> default absolute
+#   mpvpaper-ipc cycle pause            -> flip a boolean property
+#   mpvpaper-ipc raw  '<json>'          -> escape hatch, prints the raw reply
+#
+# Exit 3 means "mpvpaper isn't running" so callers can tell that apart from a
+# command that ran and failed.
+
+set -u
+
+SOCK="${MPVPAPER_SOCKET:-/tmp/mpvpaper.sock}"
+
+die()   { printf 'mpvpaper-ipc: %s\n' "$1" >&2; exit 1; }
+nosock() { printf 'mpvpaper-ipc: no socket at %s (is mpvpaper running?)\n' "$SOCK" >&2; exit 3; }
+
+[ -S "$SOCK" ] || nosock
+
+raw() { printf '%s\n' "$1" | socat - "UNIX-CONNECT:$SOCK" 2>/dev/null; }
+
+case "${1:-}" in
+    get)
+        [ $# -ge 2 ] || die "get needs a property name"
+        # .data is null for unset properties; print nothing so callers can [ -z ] test
+        raw "$(jq -nc --arg p "$2" '{command:["get_property",$p]}')" |
+            jq -r 'if .error == "success" and .data != null then .data else empty end'
+        ;;
+    set)
+        [ $# -ge 3 ] || die "set needs a property and a JSON value"
+        raw "$(jq -nc --arg p "$2" --argjson v "$3" '{command:["set_property",$p,$v]}')" >/dev/null
+        ;;
+    load)
+        [ $# -ge 2 ] || die "load needs a url or path"
+        # Built with jq so URLs containing quotes/backslashes can't break the JSON.
+        raw "$(jq -nc --arg u "$2" '{command:["loadfile",$u,"replace"]}')" >/dev/null
+        # loadfile does NOT clear pause, and keep-open-pause leaves it set at EOF.
+        # Without this the next file loads and then sits at t=0 forever.
+        raw '{"command":["set_property","pause",false]}' >/dev/null
+        ;;
+    seek)
+        # seek <seconds> [absolute|relative]   (default absolute)
+        [ $# -ge 2 ] || die "seek needs a position in seconds"
+        raw "$(jq -nc --argjson s "$2" --arg m "${3:-absolute}" '{command:["seek",$s,$m]}')" >/dev/null
+        ;;
+    cycle)
+        # Flip a boolean property (pause, mute) without having to read it first.
+        [ $# -ge 2 ] || die "cycle needs a property name"
+        raw "$(jq -nc --arg p "$2" '{command:["cycle",$p]}')" >/dev/null
+        ;;
+    raw)
+        [ $# -ge 2 ] || die "raw needs a JSON command"
+        raw "$2"
+        ;;
+    ''|-h|--help)
+        sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+        ;;
+    *)
+        die "unknown subcommand '$1' (try: get set load seek cycle raw)"
+        ;;
+esac
