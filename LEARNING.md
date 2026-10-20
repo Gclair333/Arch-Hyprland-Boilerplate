@@ -14,6 +14,11 @@ or ricing in general, here's a map of what lives where and how to actually poke 
 | `~/.config/wofi/style.css` | Launcher look — same `@define-color` pattern as Waybar's. |
 | `~/.config/scripts/screenshot.sh` | Wraps `grim` + `slurp` + `wl-copy` so the keybinds don't carry a long inline command. Run it directly in a terminal to see what each mode does. |
 | `~/.config/scripts/wifi-menu.sh` | The Wi-Fi picker behind the network pill: `nmcli` for data, `wofi` for the menu. The gnarliest part is the text parsing (`nmcli`'s terse output escapes `:` inside SSIDs) — worth reading slowly if you want to understand shell field-splitting. |
+| `~/.config/scripts/power-menu.sh` | The session menu behind the power pill. A small example of a `wofi --dmenu` menu with a confirm step. |
+| `~/.config/hypr/hyprlock.conf` | The lock screen's look: background, clock, password field. |
+| `~/.config/hypr/hypridle.conf` | What happens when you stop touching the machine, and after how long: dim, lock, screen off. |
+| `~/.config/scripts/wallpaper-*`, `mpvpaper-ipc` | The optional video wallpaper. `wallpaper-start` launches it, `mpvpaper-ipc` talks to it while it runs, and the rest build on that. The comments explain *why* each mpv option is there — several were found the hard way. |
+| `~/.config/scripts/watch-anime*`, `*-feed` | The optional anime-on-the-wallpaper layer. `anipy-feed` is the interesting one: a fake "player" that hands the stream to the wallpaper instead of opening a window. |
 
 None of these need a GUI editor to open. `wofi`'s launcher (`SUPER + D`) only lists installed
 *applications* — it can't open a file by name. From a terminal: `nano <path>` to edit,
@@ -33,7 +38,13 @@ man waybar-<module>           one page per module, e.g. waybar-pulseaudio,
 man 1 wofi                    command-line flags
 man 5 wofi                    config file options
 man 7 wofi                    style.css selectors
+man mpvpaper                  the video wallpaper's flags
+man mpv                       everything mpvpaper's -o accepts; see "JSON IPC"
+                               for what the wallpaper scripts send it
 ```
+
+If `man` itself is missing, that's normal — Arch's base install doesn't include it:
+`sudo pacman -S man-db`. The pages are already there; only the reader isn't.
 
 Hyprland's config *options* (as opposed to the `hyprctl` command) aren't in a man page — the
 [wiki](https://wiki.hyprland.org) is the source of truth there.
@@ -47,6 +58,9 @@ Hyprland's config *options* (as opposed to the `hyprctl` command) aren't in a ma
   truth if the config and what actually happens disagree.
 - `hyprctl monitors` / `hyprctl clients` — inspect live state generally; the fastest way to
   answer "why isn't this doing what I expect."
+- `~/.config/scripts/mpvpaper-ipc get time-pos` — ask the running video wallpaper what it's
+  doing. Any mpv property works (`pause`, `path`, `hwdec-current`); run it twice a few seconds
+  apart and the number should move.
 
 ## Use git as a build log
 

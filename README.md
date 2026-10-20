@@ -4,6 +4,10 @@ A deliberately minimal [Hyprland](https://hyprland.org/) setup for Arch Linux, t
 [Catppuccin Mocha](https://catppuccin.com/palette). Small enough to read top to bottom in a
 few minutes, then build on — not a full rice.
 
+On top of that core sits an optional **video wallpaper** layer, which can also play anime
+episodes as the desktop background. It lives in its own scripts and falls back to a plain static
+wallpaper when its tools aren't installed, so the core works the same without it.
+
 ![The bar on an empty workspace](assets/desktop.jpg)
 
 <sub>Wallpaper not included. The network name in the bar is blurred in this shot.</sub>
@@ -16,16 +20,39 @@ what it controls and points at the actual docs behind this setup, not just this 
 - **Hyprland** — rounded corners, blur, shadows, and two custom animation curves
 - **Waybar** — the bar itself is invisible; each module is its own floating frosted pill
 - **wofi** — centered translucent launcher with fuzzy matching and app icons
+- **Lock screen and idle** — hyprlock and hypridle, themed to match, plus a session menu in the bar
 - One palette, defined once per stylesheet as `@define-color` — swap the accent in a single place
 
+Optional:
+
+- **[Video wallpaper](#video-wallpaper-optional)** — [mpvpaper](https://github.com/GhostNaN/mpvpaper)
+  loops a video behind your windows, with the static image as an automatic fallback
+- **[Anime on the wallpaper](#anime-on-the-wallpaper-optional)** — episodes play as the desktop
+  background, auto-advance through a range, and resume where you stopped (no working source as of
+  October 2026 — see the status note)
+
 ```
-hypr/hyprland.conf     compositor: monitors, decoration, animations, binds
-waybar/config          bar layout and modules
-waybar/style.css       bar theming (palette lives at the top)
-wofi/config            launcher behavior and geometry
-wofi/style.css         launcher theming
-scripts/screenshot.sh  grim/slurp wrapper (region/screen, copy/save)
-scripts/wifi-menu.sh   wofi + nmcli Wi-Fi picker, opened by the network pill
+hypr/hyprland.conf            compositor: monitors, decoration, animations, binds
+hypr/hyprlock.conf            lock screen
+hypr/hypridle.conf            idle timeouts: dim -> lock -> screen off
+waybar/config                 bar layout and modules
+waybar/style.css              bar theming (palette lives at the top)
+wofi/config                   launcher behavior and geometry
+wofi/style.css                launcher theming
+scripts/screenshot.sh         grim/slurp wrapper (region/screen, copy/save)
+scripts/wifi-menu.sh          wofi + nmcli Wi-Fi picker, opened by the network pill
+scripts/power-menu.sh         wofi session menu, opened by the power pill
+
+scripts/wallpaper-start       bring up the video wallpaper (mpvpaper)
+scripts/mpvpaper-ipc          talk to it over mpv's JSON IPC socket
+scripts/wallpaper-audio       mute the wallpaper only — the bar toggle and SUPER+SHIFT+A
+scripts/wallpaper-lock-watch  pause the wallpaper while locked or asleep
+scripts/watch-anime-anipy     play anime on the wallpaper through anipy-cli
+scripts/anipy-feed            ...its player shim (anipy-player/mpv links to it)
+scripts/watch-anime           the same, through ani-cli
+scripts/mpvpaper-feed         ...its player shim
+scripts/wallpaper-resume      pick the last episode back up where it stopped
+anipy-wallpaper/              anipy-cli config used only in wallpaper mode
 ```
 
 ## Dependencies
@@ -51,10 +78,13 @@ inert until the matching tool is present.
 ```bash
 sudo pacman -S networkmanager            # Wi-Fi picker on the network pill (nmcli)
 sudo pacman -S playerctl                 # play/pause/next/prev media keys
-sudo pacman -S brightnessctl             # brightness keys (the bar slider needs nothing)
+sudo pacman -S brightnessctl             # brightness keys + hypridle's dim step (the bar slider needs nothing)
+sudo pacman -S hyprlock hypridle         # lock screen + idle timeouts
 ```
 
 `networkmanager` must also be enabled: `sudo systemctl enable --now NetworkManager`.
+
+The video wallpaper and anime extras have their own install steps, in their sections below.
 
 ### A note on `awww` (formerly `swww`)
 
@@ -71,13 +101,14 @@ These files map directly onto `~/.config`. Back up anything you already have:
 
 ```bash
 cp -r ~/.config/hypr ~/.config/hypr.bak     # repeat for waybar, wofi
-cp -r hypr waybar wofi scripts ~/.config/
-chmod +x ~/.config/scripts/*.sh
+cp -r hypr waybar wofi scripts anipy-wallpaper ~/.config/
+chmod +x ~/.config/scripts/*
 ```
 
-Then drop a wallpaper at `~/Pictures/wallpaper.jpg`, or edit the path in `hypr/hyprland.conf`
-(line 5). That path is hardcoded — if no file is there, Hyprland starts fine but the background
-stays black.
+Then drop a wallpaper at `~/Pictures/wallpaper.jpg`. With mpvpaper installed you can also put a
+video at `~/Videos/wallpaper.mp4`, which takes priority. Both paths are hardcoded, in
+`scripts/wallpaper-start` and the `--- wallpaper ---` block of `hypr/hyprland.conf` — if neither
+file is there, Hyprland starts fine but the background stays black.
 
 ## Keybindings
 
@@ -88,6 +119,7 @@ stays black.
 | `SUPER + Q` | Close focused window |
 | `SUPER + F` | Toggle fullscreen |
 | `SUPER + V` | Toggle floating |
+| `SUPER + SHIFT + L` | Lock the screen |
 | `SUPER + SHIFT + E` | Exit Hyprland |
 
 **Workspaces**
@@ -134,6 +166,17 @@ deps line); the rest need the optional packages above.
 | Play / next / previous | via `playerctl` |
 | Brightness keys | via `brightnessctl` |
 
+**Video wallpaper and anime** — the wallpaper can't take keyboard focus, so these reach it
+through mpv's IPC socket instead. They do nothing when mpvpaper isn't running.
+
+| Combo | Action |
+| --- | --- |
+| `SUPER + P` | Pause / resume the wallpaper |
+| `SUPER + [` / `SUPER + ]` | Seek back / forward 10 seconds |
+| `SUPER + SHIFT + A` | Mute / unmute the wallpaper only, not the whole system |
+| `SUPER + A` | Pick an anime to play on the wallpaper (anipy-cli, in kitty) |
+| `SUPER + R` | Resume the last episode where it stopped |
+
 ## The bar is interactive
 
 | Module | Hover | Click |
@@ -143,9 +186,10 @@ deps line); the rest need the optional packages above.
 | CPU | Usage + load average | — |
 | RAM | Used / total / available | — |
 | Brightness | Level | **Slides out a drag bar** (scroll also works) |
-| Volume | Device + level | **Slides out a drag bar**; scroll adjusts, revealed button mutes |
+| Volume | Device + level | **Slides out a drag bar**; scroll adjusts; revealed buttons mute the system and (teal) the wallpaper only |
 | Network | SSID, signal, IP | **Wi-Fi picker** (`scripts/wifi-menu.sh` — wofi + nmcli) |
 | Battery | Charge + time remaining | — |
+| Power | What the menu offers | **Session menu** (`scripts/power-menu.sh`) — lock, switch user, log out, suspend, reboot, power off |
 
 Brightness and volume use Waybar's native `backlight/slider` and `pulseaudio/slider` inside a
 click-to-reveal `group` drawer. Both write through system APIs Waybar is already linked against
@@ -157,8 +201,8 @@ The brightness slider floors at 5% so a full drag left can't black out the scree
 
 ## Scripts
 
-Two helpers in `scripts/`, called by the binds and the network pill. Both degrade quietly if
-their tools aren't installed.
+Three helpers in `scripts/`, called by the binds and the bar. All degrade quietly if their tools
+aren't installed. The wallpaper scripts are covered in their own sections below.
 
 **`screenshot.sh`** — `grim` + `slurp`, with `wl-copy` to the clipboard and an optional file
 copy. `notify-send` is best-effort, so no notification daemon just means no popup.
@@ -168,6 +212,131 @@ check on the active one. Picking a saved network reconnects; a new secured one p
 password in a `wofi --password` box. Also has rescan and a Wi-Fi on/off toggle. It reuses
 `wofi/style.css`, so it's themed with no extra config. Needs `networkmanager` running; for
 editing static/VPN/enterprise connections, `nm-connection-editor` is the GUI.
+
+**`power-menu.sh`** — the session menu behind the power pill, in the same wofi style. Log out,
+reboot, and power off ask for a second confirmation; lock, suspend, and switch user don't, since
+they're easy to undo. **Switch User** asks GDM for a fresh login screen over D-Bus, so it only
+works under GDM (it locks this session first, so your desktop isn't left open on another VT).
+
+## Lock screen and idle
+
+`hyprlock` blurs a screenshot of the desktop for its background, so the lock screen matches
+whatever the wallpaper was showing. `hypridle` dims the screen after 4 minutes idle, locks at 5,
+and turns the display off at 5½ — change the timeouts in `hypr/hypridle.conf`. The dim step needs
+`brightnessctl`.
+
+`SUPER + SHIFT + L`, the power menu, and hypridle all lock with `loginctl lock-session` rather than
+running `hyprlock` directly. That's deliberate: going through logind emits a Lock signal, which
+`scripts/wallpaper-lock-watch` uses to pause the video wallpaper while you're away, and to resume
+it when you unlock. Suspend and wake work the same way. It only resumes what it paused, so a
+wallpaper you paused yourself stays paused.
+
+To try a hyprlock config without risking a lock screen you can't get out of, run
+`hyprlock --grace 30`: moving the mouse within the first 30 seconds unlocks it without a password.
+
+## Video wallpaper (optional)
+
+```bash
+yay -S mpvpaper                  # AUR
+sudo pacman -S mpv socat jq      # every wallpaper script talks JSON to mpv over a socket
+```
+
+At login, `scripts/wallpaper-start` plays the first of `$MPVPAPER_AMBIENT`,
+`~/Videos/wallpaper.mp4`, or `~/Pictures/wallpaper.jpg` — looping and muted. If mpvpaper isn't
+installed or fails to start, `hyprland.conf` falls back to showing the image with `awww`.
+
+mpvpaper is mpv drawing on the background layer, so the running wallpaper exposes mpv's whole
+[JSON IPC](https://mpv.io/manual/stable/#json-ipc) interface on `/tmp/mpvpaper.sock`.
+`scripts/mpvpaper-ipc` wraps it, and is handy to poke at directly:
+
+```bash
+~/.config/scripts/mpvpaper-ipc get time-pos              # playback position, in seconds
+~/.config/scripts/mpvpaper-ipc set pause true
+~/.config/scripts/mpvpaper-ipc load ~/Videos/other.mp4
+```
+
+**Hardware decoding.** `wallpaper-start` asks mpv for VA-API (`hwdec=vaapi`). On Intel that needs
+`intel-media-driver`; `vainfo` from `libva-utils` confirms the driver loads, and
+`mpvpaper-ipc get hwdec-current` should then say `vaapi`. Without it mpv quietly decodes in
+software, which on a laptop is a constant battery drain.
+
+**Match the video to your screen.** Measured on a 1080p laptop with Iris Xe graphics: a 1440p60
+clip used ~20% CPU and still dropped frames, while the same clip transcoded to 1080p30 used ~13%
+and dropped none.
+
+```bash
+ffmpeg -i in.mp4 -vf "scale=1920:1080:flags=lanczos,fps=30" \
+  -c:v libx264 -crf 20 -preset slow -pix_fmt yuv420p -c:a aac -b:a 128k wallpaper.mp4
+```
+
+Showing a still image through mpvpaper costs ~1% CPU and ~260 MB of RAM for what `awww` shows
+for free, so it's only worth running mpvpaper once you have a video.
+
+A few mpv options turned out to be load-bearing, in case you change them:
+
+- `keep-open=yes`, not `idle=yes` — without it mpvpaper exits when the file ends, and the
+  wallpaper goes with it.
+- `mute=yes`, not `no-audio` — `no-audio` drops the audio track, leaving nothing to unmute later.
+- `loadfile` doesn't clear `pause`, so `mpvpaper-ipc load` always unpauses after loading.
+
+mpvpaper's own `-p` (pause while hidden) is off, because it would also pause an episode every
+time a window covered the wallpaper. For an ambient-only setup, `env = MPVPAPER_AUTOPAUSE,1` in
+`hyprland.conf` turns it on.
+
+If the wallpaper ever freezes on one frame, a seek (`SUPER + ]`) gets it moving again. `SUPER + P`
+won't help, because mpv still considers itself playing.
+
+## Anime on the wallpaper (optional)
+
+> **Status, October 2026: no working source.** animehub, the site anipy-cli pulls episodes from
+> here, changed its video player in a way anipy-cli 3.10.x can't read — search and episode lists
+> still work, then every episode fails to load. ani-cli 5.x's only source (anidb.app) has been
+> down since September 2026. The wallpaper side is unaffected: these scripts play any stream URL
+> or local file they're handed.
+
+Neither anipy-cli nor ani-cli needs to open a window of its own. Both let you choose the "player",
+and the shims here (`scripts/anipy-feed`, `scripts/mpvpaper-feed`) pass each episode's stream to
+the mpvpaper that's already running, then wait until it ends. Both tools wait for the player before
+starting the next episode, so playing a range auto-advances with no extra glue.
+
+anipy-cli isn't packaged for Arch. A private venv keeps it off the system Python:
+
+```bash
+python -m venv ~/.local/share/anipy-venv
+~/.local/share/anipy-venv/bin/pip install anipy-cli
+ln -s ~/.local/share/anipy-venv/bin/anipy-cli ~/.local/bin/anipy-cli
+```
+
+`watch-anime-anipy` points `XDG_CONFIG_HOME` at `~/.config/anipy-wallpaper/`, so running plain
+`anipy-cli` still plays in a normal mpv window. That config only sets two things (the shim as the
+player, and the provider); anipy-cli fills in everything else on its first run.
+
+```bash
+watch-anime-anipy                               # pick interactively — what SUPER + A opens
+watch-anime-anipy -s "steins gate:1:sub"        # one episode, straight in
+watch-anime-anipy -B -s "frieren:1-12:sub"      # binge a range, auto-advancing
+```
+
+Episodes play with sound. `SUPER + SHIFT + A`, or the teal button in the volume drawer, mutes just
+the wallpaper. When you quit, the ambient video comes back.
+
+**Resume.** The shim saves the show, episode, and position every 5 seconds to
+`~/.local/state/mpvpaper-ani/resume.json` — often enough that even a hard power-off loses only a
+few seconds. `SUPER + R` (`scripts/wallpaper-resume`) picks it back up: a half-watched episode
+resumes at the saved spot, and a finished one moves on to the next. Stream links expire, so
+resuming searches for the show again and then seeks; if the search lands on a different title, it
+starts from the beginning instead of seeking into the wrong show. `wallpaper-resume --status`
+shows what it would do without playing anything.
+
+`hyprland.conf` also has a commented-out `exec-once` that resumes automatically 10 seconds after
+login, landing paused and muted. It's off for now: with no working source it would only fail at
+every login.
+
+`watch-anime` and `mpvpaper-feed` are the same pair for [ani-cli](https://github.com/pystardust/ani-cli)
+(`yay -S ani-cli`), kept in case its source comes back.
+
+Comments in the wallpaper scripts cite sections of the author's planning notes ("plan §7.2").
+Those notes aren't part of this repo; the reasoning that matters is written out in each comment.
 
 ## Customizing the theme
 
@@ -190,6 +359,9 @@ hyprctl reload            # reloads Hyprland
                           # wofi re-reads its config on every launch
 ```
 
+`hyprctl reload` doesn't re-run `exec-once` lines — changes to the wallpaper, lock-watch, or
+hypridle autostart take effect at the next login.
+
 ## Version notes
 
 Written and verified against:
@@ -200,6 +372,11 @@ Written and verified against:
 | Waybar | 0.15.0 |
 | wofi | 1.5.3 |
 | awww | 0.12.1 |
+| hyprlock | 0.9.6 |
+| hypridle | 0.1.8 |
+| mpvpaper | 1.9 |
+| mpv | 0.41.0 |
+| anipy-cli | 3.10.0 |
 
 **Hyprland 0.53 overhauled window and layer rule syntax.** The layer rules here use the current
 form:
@@ -218,3 +395,7 @@ outright. Three things changed:
 
 Most guides and dotfile repos still show the old syntax, and a rejected rule doesn't announce
 itself. If a rule seems to do nothing, run `hyprctl configerrors`.
+
+**hyprlock 0.9 has no `grace` or `no_fade_in` config keys.** Older configs (and many guides) set
+them in `general { }`; hyprlock logs them as errors and carries on, so nothing visibly breaks.
+Grace is now the `--grace` command-line flag.
