@@ -1,0 +1,103 @@
+#!/bin/sh
+# wallpaper-resume — pick up where the last episode left off.
+#
+#   wallpaper-resume            resume it (or start the next episode if finished)
+#   wallpaper-resume --status   say what's resumable and exit; no playback
+#   wallpaper-resume --auto     login mode: quiet, and lands PAUSED + MUTED
+#
+# --auto exists because the saved stream URL is worthless — anipy-cli's links are
+# short-lived and host-signed (plan §7.1) — so resuming means re-running anipy-cli,
+# a live network scrape taking several seconds. Two things make that safe at
+# login: the exec-once line delays it so it isn't racing session startup, and
+# --auto hands the shim MPVPAPER_START_PAUSED so it parks on the resumed frame
+# silently rather than playing sound at you. Unpause with SUPER+P.
+#   MPVPAPER_AUTORESUME_PLAY=1 starts it playing immediately instead.
+
+set -u
+
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/mpvpaper-ani/resume.json"
+
+# Below this, seeking isn't worth it — just start the episode over.
+MIN_RESUME="${MPVPAPER_MIN_RESUME:-30}"
+# Above this fraction of the runtime, treat it as finished even if the shim was
+# killed before it saw EOF (credits rolling, closed the lid, etc).
+DONE_FRACTION="${MPVPAPER_DONE_FRACTION:-0.98}"
+
+AUTO=0
+[ "${1:-}" = "--auto" ] && AUTO=1
+
+# In --auto nothing-to-resume is the normal case at most logins, not an error.
+die() {
+    [ "$AUTO" = 1 ] && exit 0
+    printf 'wallpaper-resume: %s\n' "$1" >&2
+    exit 1
+}
+
+[ -f "$STATE" ] || die "nothing to resume (no $STATE)"
+jq -e . "$STATE" >/dev/null 2>&1 || die "resume state is corrupt: $STATE"
+
+title=$(jq -r '.anime_title // empty' "$STATE")
+ep=$(jq -r    '.ep_no       // empty' "$STATE")
+pos=$(jq -r   '.position    // 0'     "$STATE")
+dur=$(jq -r   '.duration    // 0'     "$STATE")
+done_flag=$(jq -r '.completed // false' "$STATE")
+when=$(jq -r  '.updated     // "?"'   "$STATE")
+
+[ -n "$title" ] || die "resume state has no anime title"
+[ -n "$ep" ]    || die "resume state has no episode number"
+
+hms() { printf '%d:%02d:%02d' "$(($1/3600))" "$(($1%3600/60))" "$(($1%60))"; }
+pos_i=$(printf '%.0f' "$pos" 2>/dev/null || echo 0)
+dur_i=$(printf '%.0f' "$dur" 2>/dev/null || echo 0)
+
+# Near enough to the end counts as finished, even without an EOF flag.
+if [ "$done_flag" != "true" ] && [ "$dur_i" -gt 0 ]; then
+    if [ "$(echo "$pos $dur $DONE_FRACTION" | awk '{print ($1 > $2*$3) ? 1 : 0}')" = 1 ]; then
+        done_flag=true
+    fi
+fi
+
+next_ep="$ep"
+resume_at=0
+if [ "$done_flag" = "true" ]; then
+    # Only advance when the episode number is a plain integer — specials like
+    # "7.5" or "OVA" shouldn't be incremented into something that doesn't exist.
+    case "$ep" in
+        ''|*[!0-9]*) action="replay episode $ep (finished, and it isn't a plain number to advance from)" ;;
+        *) next_ep=$((ep + 1)); action="start episode $next_ep (episode $ep finished)" ;;
+    esac
+elif [ "$pos_i" -lt "$MIN_RESUME" ]; then
+    action="restart episode $ep (only $(hms "$pos_i") in)"
+else
+    resume_at="$pos"
+    action="resume episode $ep at $(hms "$pos_i")$([ "$dur_i" -gt 0 ] && printf ' of %s' "$(hms "$dur_i")")"
+fi
+
+if [ "${1:-}" = "--status" ]; then
+    printf '%s\n  would %s\n  (saved %s)\n' "$title" "$action" "$when"
+    exit 0
+fi
+
+[ "$AUTO" = 1 ] || printf 'Resuming "%s" — %s\n' "$title" "$action"
+
+# Login auto-resume parks paused+muted unless explicitly told to play.
+START_PAUSED=0
+[ "$AUTO" = 1 ] && [ "${MPVPAPER_AUTORESUME_PLAY:-0}" != "1" ] && START_PAUSED=1
+
+# anipy-cli's -s takes results[0] without prompting (parse_auto_search), so this
+# stays non-interactive — the same job ani-cli's -S 1 used to do here.
+#
+# The query is truncated at the first colon: -s splits its argument on ":" to get
+# query:episode:type, so a title like "Frieren: Beyond Journey's End" would
+# otherwise be read as query="Frieren", episode=" Beyond Journey's End". Search is
+# fuzzy enough that the stem still matches, and anipy-feed still cross-checks
+# MPVPAPER_EXPECT_TITLE against what anipy-cli actually picked, so a stem that
+# matches the WRONG show refuses to seek rather than resuming into it blind.
+#
+# The type field is left off so anipy-cli falls back to preferred_type from config.
+query="${title%%:*}"
+MPVPAPER_RESUME_AT="$resume_at" \
+MPVPAPER_EXPECT_TITLE="$title" \
+MPVPAPER_START_PAUSED="$START_PAUSED" \
+    exec "$SELF_DIR/watch-anime-anipy" -s "$query:$next_ep"
