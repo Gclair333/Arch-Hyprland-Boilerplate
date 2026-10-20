@@ -1,0 +1,63 @@
+#!/bin/sh
+# backlight — screen brightness through logind, the same way the Waybar slider
+# does it. No brightnessctl, root, or video group needed.
+#
+#   backlight get          print the current brightness as a percentage
+#   backlight set 40       set it to 40%
+#   backlight up 5         +5%      (the brightness keys)
+#   backlight down 5       -5%, never below 1%, so the screen can't go black
+#   backlight dim 15       remember the current level, then drop to 15%
+#                          (hypridle's warning before it locks)
+#   backlight restore      go back to the level `dim` remembered
+#
+# Uses the first device in /sys/class/backlight; set BACKLIGHT_DEVICE to pick
+# another. Exits quietly when there's no backlight (e.g. a desktop monitor).
+
+set -u
+
+dev="${BACKLIGHT_DEVICE:-}"
+[ -n "$dev" ] || for d in /sys/class/backlight/*; do [ -e "$d" ] && { dev=${d##*/}; break; }; done
+[ -n "$dev" ] && [ -r "/sys/class/backlight/$dev/max_brightness" ] || exit 0
+
+SYS="/sys/class/backlight/$dev"
+SAVED="${XDG_RUNTIME_DIR:-/tmp}/backlight-$dev.saved"
+max=$(cat "$SYS/max_brightness")
+cur=$(cat "$SYS/brightness")
+
+write_raw() {
+    busctl call org.freedesktop.login1 /org/freedesktop/login1/session/auto \
+        org.freedesktop.login1.Session SetBrightness ssu backlight "$dev" "$1" >/dev/null
+}
+
+# Percent -> raw value, clamped to 1-100% of max.
+to_raw() {
+    p=$1
+    [ "$p" -lt 1 ] && p=1
+    [ "$p" -gt 100 ] && p=100
+    echo $(( max * p / 100 ))
+}
+
+percent=$(( (cur * 100 + max / 2) / max ))
+
+case "${1:-get}" in
+    get)     echo "$percent" ;;
+    set)     write_raw "$(to_raw "${2:?percentage}")" ;;
+    up)      write_raw "$(to_raw $(( percent + ${2:-5} )))" ;;
+    down)    write_raw "$(to_raw $(( percent - ${2:-5} )))" ;;
+    dim)
+        target=$(to_raw "${2:-15}")
+        # Already at or below the dim level: nothing to dim, nothing to restore.
+        [ "$cur" -gt "$target" ] || exit 0
+        echo "$cur" > "$SAVED"
+        write_raw "$target"
+        ;;
+    restore)
+        [ -f "$SAVED" ] || exit 0
+        write_raw "$(cat "$SAVED")"
+        rm -f "$SAVED"
+        ;;
+    *)
+        printf 'usage: %s {get|set N|up N|down N|dim N|restore}\n' "${0##*/}" >&2
+        exit 2
+        ;;
+esac

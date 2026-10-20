@@ -21,6 +21,9 @@ what it controls and points at the actual docs behind this setup, not just this 
 - **Waybar** — the bar itself is invisible; each module is its own floating frosted pill
 - **wofi** — centered translucent launcher with fuzzy matching and app icons
 - **Lock screen and idle** — hyprlock and hypridle, themed to match, plus a session menu in the bar
+- **[Settings menu](#settings-menu)** — a gear in the bar (or `SUPER + I`) for lock and sleep
+  timings, display, sound, keyboard, mouse, appearance, and date & time, saved to files of
+  their own so the configs here stay untouched
 - One palette, defined once per stylesheet as `@define-color` — swap the accent in a single place
 
 Optional:
@@ -33,7 +36,7 @@ Optional:
 ```
 hypr/hyprland.conf            compositor: monitors, decoration, animations, binds
 hypr/hyprlock.conf            lock screen
-hypr/hypridle.conf            idle timeouts: dim -> lock -> screen off
+hypr/hypridle.conf            idle timeouts: dim -> lock -> screen off (-> sleep)
 waybar/config                 bar layout and modules
 waybar/style.css              bar theming (palette lives at the top)
 wofi/config                   launcher behavior and geometry
@@ -41,11 +44,15 @@ wofi/style.css                launcher theming
 scripts/screenshot.sh         grim/slurp wrapper (region/screen, copy/save)
 scripts/wifi-menu.sh          wofi + nmcli Wi-Fi picker, opened by the network pill
 scripts/power-menu.sh         wofi session menu, opened by the power pill
+scripts/settings-menu.sh      wofi Settings menu, opened by the gear pill or SUPER+I
+scripts/backlight             screen brightness through logind: the keys, and hypridle's dim
+scripts/lock-hint             the warnings under the lock screen's password box
 
 scripts/wallpaper-start       bring up the video wallpaper (mpvpaper)
 scripts/mpvpaper-ipc          talk to it over mpv's JSON IPC socket
 scripts/wallpaper-audio       mute the wallpaper only — the bar toggle and SUPER+SHIFT+A
 scripts/wallpaper-lock-watch  pause the wallpaper while locked or asleep
+scripts/wallpaper-idle-ok     keep the screen awake while an episode plays
 scripts/watch-anime           play anime on the wallpaper through ani-cli
 scripts/mpvpaper-feed         ...its player shim
 scripts/watch-anime-anipy     the same, through anipy-cli
@@ -57,11 +64,12 @@ anipy-wallpaper/              anipy-cli config used only in wallpaper mode
 ## Dependencies
 
 ```bash
-sudo pacman -S hyprland waybar wofi kitty awww ttf-jetbrains-mono-nerd grim slurp wl-clipboard
+sudo pacman -S hyprland waybar wofi kitty awww ttf-jetbrains-mono-nerd grim slurp wl-clipboard jq
 ```
 
 `grim` + `slurp` + `wl-clipboard` back the screenshot binds and `scripts/screenshot.sh` —
-core here because a screenshot key is table stakes for a usable desktop.
+core here because a screenshot key is table stakes for a usable desktop. `jq` lets the Settings
+menu read the JSON that `hyprctl` and `pactl` report.
 
 The Waybar volume module and the volume keys use `wpctl`, so it also expects PipeWire:
 
@@ -77,7 +85,6 @@ inert until the matching tool is present.
 ```bash
 sudo pacman -S networkmanager            # Wi-Fi picker on the network pill (nmcli)
 sudo pacman -S playerctl                 # play/pause/next/prev media keys
-sudo pacman -S brightnessctl             # brightness keys + hypridle's dim step (the bar slider needs nothing)
 sudo pacman -S hyprlock hypridle         # lock screen + idle timeouts
 ```
 
@@ -118,6 +125,7 @@ file is there, Hyprland starts fine but the background stays black.
 | `SUPER + Q` | Close focused window |
 | `SUPER + F` | Toggle fullscreen |
 | `SUPER + V` | Toggle floating |
+| `SUPER + I` | [Settings](#settings-menu), as on Windows |
 | `SUPER + SHIFT + L` | Lock the screen |
 | `SUPER + SHIFT + E` | Exit Hyprland |
 
@@ -163,7 +171,7 @@ deps line); the rest need the optional packages above.
 | `SUPER + SHIFT + S` | Select a region to clipboard **and** `~/Pictures/Screenshots/` |
 | Volume / mute / mic keys | via `wpctl` |
 | Play / next / previous | via `playerctl` |
-| Brightness keys | via `brightnessctl` |
+| Brightness keys | via `scripts/backlight` (logind, nothing to install) |
 
 **Video wallpaper and anime** — the wallpaper can't take keyboard focus, so these reach it
 through mpv's IPC socket instead. They do nothing when mpvpaper isn't running.
@@ -188,19 +196,58 @@ through mpv's IPC socket instead. They do nothing when mpvpaper isn't running.
 | Volume | Device + level | **Slides out a drag bar**; scroll adjusts; revealed buttons mute the system and (teal) the wallpaper only |
 | Network | SSID, signal, IP | **Wi-Fi picker** (`scripts/wifi-menu.sh` — wofi + nmcli) |
 | Battery | Charge + time remaining | — |
+| Settings (gear) | What the menu covers | **[Settings menu](#settings-menu)** (`scripts/settings-menu.sh`) |
 | Power | What the menu offers | **Session menu** (`scripts/power-menu.sh`) — lock, switch user, log out, suspend, reboot, power off |
 
 Brightness and volume use Waybar's native `backlight/slider` and `pulseaudio/slider` inside a
 click-to-reveal `group` drawer. Both write through system APIs Waybar is already linked against
-(logind for brightness, PipeWire for volume) — **no `brightnessctl`, `wpctl`, or `video` group
-needed** for the bar. Those tools are still listed as optional because the *keybindings* use them.
+(logind for brightness, PipeWire for volume) — **no `brightnessctl` or `video` group needed**.
+The brightness keys and hypridle's dim go through logind the same way, via `scripts/backlight`.
 
 The brightness slider floors at 5% so a full drag left can't black out the screen. The clock is
 12-hour (`%I:%M %p`) — change it to `{:%H:%M}` in `waybar/config` for 24-hour.
 
+## Settings menu
+
+The gear in the bar, or `SUPER + I`, opens `scripts/settings-menu.sh`: wofi menus in the same
+style as the launcher. Arrow keys or the mouse to move, Enter to pick, typing filters the list,
+and Esc closes it from any page.
+
+| Page | What you can change |
+| --- | --- |
+| Lock screen & sleep | When the screen locks, turns off, and sleeps (each can be *Never*); the dim warning before it; staying awake while anime plays on the wallpaper; lock now; change your password |
+| Display | Scale (how big everything is), refresh rate, resolution, brightness. A new refresh rate or resolution goes back by itself after 15 seconds unless you keep it |
+| Sound | Output and input device, microphone mute |
+| Keyboard | Layout (every layout and variant xkb knows, searchable), key repeat delay and speed, Num Lock at login |
+| Mouse & touchpad | Pointer speed, acceleration, scroll direction, tap to click, natural scrolling, ignoring the touchpad while typing |
+| Appearance | Animations, blur, shadows, gaps, rounded corners, fading unfocused windows |
+| Date & time | Time zone, setting the time automatically |
+| Wi-Fi | Opens the Wi-Fi picker |
+| Wallpaper | Play / pause, wallpaper sound, anime (only shown when mpvpaper is installed) |
+| About this computer | A hardware and system summary; pick a line to copy it |
+| Update the system | `sudo pacman -Syu` in a terminal, then offers `yay -Sua` for AUR packages |
+| Reset to defaults | Forgets everything changed in this menu |
+
+**Where your choices go.** The menu never edits the files in this repo. Hyprland options are
+written to `~/.config/hypr/settings.conf`, which `hyprland.conf` reads last so it wins. Lock and
+sleep timings go to `~/.config/hypr/settings-idle.conf`, which `hypridle.conf` reads right after
+its own defaults. Both files appear on your first change and hold one line per setting: plain
+text you can read, edit, or delete a line from to get that default back. `.gitignore` keeps them
+out of the repo. Changes apply at once — Hyprland options through `hyprctl keyword`, timings by
+restarting hypridle — and the files carry them across logins.
+
+The time zone and clock sync are system-wide, so those two open a terminal that runs
+`sudo timedatectl` and asks for your password. Sound devices are remembered by WirePlumber.
+
+**Reading files that may not exist.** `source =` on a missing file is normally a config error,
+so both configs wrap it in hyprlang's `# hyprlang noerror true` / `false` comments. Each settings
+file starts with its own `# hyprlang noerror false`, so a typo inside one is still reported. In
+`hypridle.conf`, `# hyprlang if VAR` … `# hyprlang endif` around each step skips it when its
+timing is empty — that's how *Never* works.
+
 ## Scripts
 
-Three helpers in `scripts/`, called by the binds and the bar. All degrade quietly if their tools
+Smaller helpers in `scripts/`, called by the binds and the bar. All degrade quietly if their tools
 aren't installed. The wallpaper scripts are covered in their own sections below.
 
 **`screenshot.sh`** — `grim` + `slurp`, with `wl-copy` to the clipboard and an optional file
@@ -217,12 +264,20 @@ reboot, and power off ask for a second confirmation; lock, suspend, and switch u
 they're easy to undo. **Switch User** asks GDM for a fresh login screen over D-Bus, so it only
 works under GDM (it locks this session first, so your desktop isn't left open on another VT).
 
+**`backlight`** — `get`, `set 40`, `up 5`, `down 5` in percent, plus `dim` / `restore` for
+hypridle. It goes through logind's `SetBrightness`, the same call the Waybar slider makes, so it
+needs no root, no `video` group, and no `brightnessctl`. `down` stops at 1% so the screen can't
+go fully black.
+
+**`lock-hint`** — prints the warning line under hyprlock's password box, or nothing. See below.
+
 ## Lock screen and idle
 
 `hyprlock` blurs a screenshot of the desktop for its background, so the lock screen matches
 whatever the wallpaper was showing. `hypridle` dims the screen after 4 minutes idle, locks at 5,
-and turns the display off at 5½ — change the timeouts in `hypr/hypridle.conf`. The dim step needs
-`brightnessctl`.
+and turns the display off at 5½. Change those under **Settings → Lock screen & sleep**, which
+can also put the laptop to sleep after a while (off by default). The defaults are at the top of
+`hypr/hypridle.conf`.
 
 `SUPER + SHIFT + L`, the power menu, and hypridle all lock with `loginctl lock-session` rather than
 running `hyprlock` directly. That's deliberate: going through logind emits a Lock signal, which
@@ -230,8 +285,37 @@ running `hyprlock` directly. That's deliberate: going through logind emits a Loc
 it when you unlock. Suspend and wake work the same way. It only resumes what it paused, so a
 wallpaper you paused yourself stays paused.
 
+**Three wrong passwords lock you out for 10 minutes.** Arch's `pam_faillock` locks an account
+after 3 wrong passwords within 15 minutes (the lock screen, the login screen, and `sudo` all
+count) and then refuses even the *right* password until the 10 minutes are up. To keep that from
+happening by accident:
+
+- Enter on an empty password box doesn't count as a try (`ignore_empty_input`). Without it, a
+  habit like pressing Enter to wake the screen uses up one of the three.
+- For about 2 seconds after a wrong password, hyprlock ignores the keyboard while it checks.
+  The box says *Checking…* during that time, so you know to wait before typing again.
+- `scripts/lock-hint` puts a warning under the password box: Caps Lock is on, one more wrong
+  password will lock you out, or you're locked out *until 6:42 PM*, so a lockout doesn't look
+  like your password stopped working.
+
+If it happens anyway, wait it out or restart: the counter lives in `/run` and clears on boot.
+From a session that's still logged in, `faillock --user $USER` shows the counter and
+`faillock --user $USER --reset` clears it, with no sudo needed for your own account. The limits
+themselves are in `/etc/security/faillock.conf` (`deny`, `fail_interval`, `unlock_time`).
+
+**Anime keeps the screen awake.** Watching doesn't touch the keyboard or mouse, so to hypridle it
+looks like you walked away, and mpvpaper doesn't hold the screen on the way a normal video player
+does. So every idle step first asks `scripts/wallpaper-idle-ok`, which answers *not now* while an
+episode is playing (a paused episode or the ambient loop doesn't count). hypridle asks again every
+30 seconds, so the screen still locks soon after the episode ends. It can be switched off under
+Settings → Lock screen & sleep. If the script is missing, the answer is *go ahead*: this can delay
+a lock, never prevent one.
+
 To try a hyprlock config without risking a lock screen you can't get out of, run
 `hyprlock --grace 30`: moving the mouse within the first 30 seconds unlocks it without a password.
+That unlock cuts hyprlock's password check short, though, and faillock counts it as a wrong
+password (so does unlocking with `pkill -USR1 hyprlock`). Three test runs within 15 minutes lock
+you out; run `faillock --user $USER --reset` after testing.
 
 ## Video wallpaper (optional)
 
@@ -356,13 +440,14 @@ whole block with Latte, Frappé, or Macchiato values reflavors the setup wholesa
 ## Reloading after a change
 
 ```bash
-killall -SIGUSR2 waybar   # reloads Waybar config + CSS in place
-hyprctl reload            # reloads Hyprland
-                          # wofi re-reads its config on every launch
+killall -SIGUSR2 waybar                         # reloads Waybar config + CSS in place
+hyprctl reload                                  # reloads Hyprland
+pkill -x hypridle; hyprctl dispatch exec hypridle   # restarts hypridle with its new config
+                                                # wofi and hyprlock re-read theirs every launch
 ```
 
-`hyprctl reload` doesn't re-run `exec-once` lines — changes to the wallpaper, lock-watch, or
-hypridle autostart take effect at the next login.
+`hyprctl reload` doesn't re-run `exec-once` lines, so changes to the wallpaper or lock-watch
+autostart take effect at the next login. The Settings menu restarts hypridle itself.
 
 ## Version notes
 
@@ -401,4 +486,5 @@ itself. If a rule seems to do nothing, run `hyprctl configerrors`.
 
 **hyprlock 0.9 has no `grace` or `no_fade_in` config keys.** Older configs (and many guides) set
 them in `general { }`; hyprlock logs them as errors and carries on, so nothing visibly breaks.
-Grace is now the `--grace` command-line flag.
+Grace is now the `--grace` command-line flag. Likewise `fail_timeout` moved from `input-field`
+to `general`: set in the old place, it's silently ignored.

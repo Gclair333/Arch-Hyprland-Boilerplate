@@ -6,3 +6,8 @@
 *.bak
 *.bak-*
 *.old
+
+# Your own choices from the Settings menu (scripts/settings-menu.sh writes
+# these into ~/.config/hypr). Personal, so never part of the template.
+hypr/settings.conf
+hypr/settings-idle.conf

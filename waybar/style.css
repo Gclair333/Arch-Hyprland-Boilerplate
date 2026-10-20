@@ -46,6 +46,7 @@ window#waybar {
 #volume,
 #network,
 #battery,
+#custom-settings,
 #custom-power {
 	/* Slightly translucent so Hyprland's layer blur shows through. */
 	background-color: alpha(@base, 0.88);
@@ -156,6 +157,22 @@ window#waybar {
 #pulseaudio.muted,
 #network.disconnected {
 	color: @overlay0;
+}
+
+/* ---- settings ----
+ * Mauve, the accent of the wofi menus it opens. Same lone-glyph padding and
+ * hover fill as the power pill next to it. */
+#custom-settings {
+	color: @mauve;
+	padding: 2px 11px;
+	transition: background-color 200ms ease, color 200ms ease;
+}
+
+#custom-settings:hover {
+	color: @crust;
+	background-color: @mauve;
+	box-shadow: none;
+	text-shadow: none;
 }
 
 /* ---- power / session menu ----

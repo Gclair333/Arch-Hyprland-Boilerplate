@@ -11,7 +11,7 @@
 
 	"modules-left": ["hyprland/workspaces"],
 	"modules-center": ["clock"],
-	"modules-right": ["cpu", "memory", "group/brightness", "group/volume", "network", "battery", "custom/power"],
+	"modules-right": ["cpu", "memory", "group/brightness", "group/volume", "network", "battery", "custom/settings", "custom/power"],
 
 	"hyprland/workspaces": {
 		// {icon} maps each name through format-icons; numbers stay numbers, and
@@ -151,6 +151,15 @@
 		"format-plugged": "󰚥 {capacity}%",
 		"format-icons": ["󰁺", "󰁼", "󰁾", "󰂀", "󰂂", "󰁹"],
 		"tooltip-format": "Battery\n{capacity}% - {timeTo}"
+	},
+
+	// Settings: lock screen & sleep, display, sound, keyboard, mouse, appearance,
+	// date & time, and more. Same wofi styling as the other menus; SUPER+I
+	// opens it too. Your choices are saved to ~/.config/hypr/settings*.conf.
+	"custom/settings": {
+		"format": "󰒓",
+		"on-click": "~/.config/scripts/settings-menu.sh",
+		"tooltip-format": "Settings\nLock screen, display, sound, keyboard, mouse, time, …"
 	},
 
 	// Session menu: lock, switch user, log out, suspend, reboot, power off.

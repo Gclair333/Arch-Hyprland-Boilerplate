@@ -1,0 +1,24 @@
+#!/bin/sh
+# wallpaper-idle-ok — hypridle's condition_cmd. Exit 0 when it's fine to dim,
+# lock, turn the screen off, or sleep; exit 1 while an episode is playing on
+# the video wallpaper.
+#
+# Watching an episode looks idle to hypridle (no keyboard or mouse input),
+# and mpvpaper, unlike a normal video player, doesn't keep the screen awake
+# by itself. So without this, the lock screen fires 5 minutes into an episode
+# and wallpaper-lock-watch pauses it.
+#
+# Paused episode, the ambient loop, or no video wallpaper at all: fine to idle.
+# hypridle re-asks every condition_retry seconds, so the lock still happens
+# shortly after the episode ends or you pause it.
+
+IPC="$(dirname "$0")/mpvpaper-ipc"
+
+[ "$("$IPC" get pause 2>/dev/null)" = "false" ] || exit 0
+
+# Episodes are the only thing that doesn't loop: mpvpaper-feed sets
+# loop-file=no so the episode can end; the ambient video runs on inf.
+case "$("$IPC" get loop-file 2>/dev/null)" in
+    no|false|0) exit 1 ;;
+esac
+exit 0
