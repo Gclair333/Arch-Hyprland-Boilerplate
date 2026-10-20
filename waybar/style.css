@@ -45,7 +45,8 @@ window#waybar {
 #brightness,
 #volume,
 #network,
-#battery {
+#battery,
+#custom-power {
 	/* Slightly translucent so Hyprland's layer blur shows through. */
 	background-color: alpha(@base, 0.88);
 	color: @text;
@@ -155,6 +156,23 @@ window#waybar {
 #pulseaudio.muted,
 #network.disconnected {
 	color: @overlay0;
+}
+
+/* ---- power / session menu ----
+ * Red is the one accent not already spoken for in the right cluster, and it
+ * reads as "this ends things" at a glance. Slightly tighter padding than the
+ * text pills since it's a lone glyph. */
+#custom-power {
+	color: @red;
+	padding: 2px 11px;
+	transition: background-color 200ms ease, color 200ms ease;
+}
+
+#custom-power:hover {
+	color: @crust;
+	background-color: @red;
+	box-shadow: none;
+	text-shadow: none;
 }
 
 /* ---- drag sliders (revealed by clicking the brightness / volume pill) ---- */

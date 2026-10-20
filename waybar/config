@@ -11,7 +11,7 @@
 
 	"modules-left": ["hyprland/workspaces"],
 	"modules-center": ["clock"],
-	"modules-right": ["cpu", "memory", "group/brightness", "group/volume", "network", "battery"],
+	"modules-right": ["cpu", "memory", "group/brightness", "group/volume", "network", "battery", "custom/power"],
 
 	"hyprland/workspaces": {
 		// {icon} maps each name through format-icons; numbers stay numbers, and
@@ -151,6 +151,14 @@
 		"format-plugged": "󰚥 {capacity}%",
 		"format-icons": ["󰁺", "󰁼", "󰁾", "󰂀", "󰂂", "󰁹"],
 		"tooltip-format": "Battery\n{capacity}% - {timeTo}"
+	},
+
+	// Session menu: lock, switch user, log out, suspend, reboot, power off.
+	// Opens the same wofi styling as the launcher and Wi-Fi picker.
+	"custom/power": {
+		"format": "󰐥",
+		"on-click": "~/.config/scripts/power-menu.sh",
+		"tooltip-format": "Session\nLock, switch user, log out, reboot, power off"
 	},
 
 	"clock": {
