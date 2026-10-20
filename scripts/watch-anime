@@ -1,0 +1,57 @@
+#!/bin/sh
+# watch-anime — play anime on the desktop wallpaper.
+#
+#   watch-anime                    pick interactively
+#   watch-anime -e "1-12" "bebop"  whole range, auto-advancing
+#   watch-anime -c                 continue from ani-cli history
+#
+# All arguments are passed straight through to ani-cli.
+#
+# Auto-advance is ani-cli's own: play_episode() opens with a bare `wait` and
+# range mode is a plain for-loop, so a player that blocks until the episode ends
+# is all that's needed. mpvpaper-feed blocks. No mpv hooks involved.
+#
+# Leaves the desktop the way it found it — see restore() below.
+
+set -u
+
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+IPC="$SELF_DIR/mpvpaper-ipc"
+START="$SELF_DIR/wallpaper-start"
+
+command -v ani-cli >/dev/null 2>&1 || { printf 'watch-anime: ani-cli is not installed\n' >&2; exit 1; }
+
+# If the wallpaper was already up (Phase 5 permanent mode) we hand it back in
+# its ambient state. If we started it ourselves just for this session, we take
+# it down again and let awww's static wallpaper show through underneath.
+started_it=0
+if ! pgrep -x mpvpaper >/dev/null 2>&1; then
+    "$START" --quiet || exit 1
+    started_it=1
+fi
+
+restore() {
+    if [ "$started_it" = 1 ]; then
+        pkill -x mpvpaper 2>/dev/null
+        rm -f "${MPVPAPER_SOCKET:-/tmp/mpvpaper.sock}"
+    else
+        # Put the ambient loop back: re-mute, restore looping, reload the source.
+        "$IPC" set mute 'true'          2>/dev/null
+        "$IPC" set loop-file '"inf"'    2>/dev/null
+        if [ -n "${MPVPAPER_AMBIENT:-}" ] && [ -f "$MPVPAPER_AMBIENT" ]; then
+            "$IPC" load "$MPVPAPER_AMBIENT" 2>/dev/null
+        elif [ -f "$HOME/Videos/wallpaper.mp4" ]; then
+            "$IPC" load "$HOME/Videos/wallpaper.mp4" 2>/dev/null
+        else
+            "$IPC" load "$HOME/Pictures/wallpaper.jpg" 2>/dev/null
+        fi
+    fi
+}
+
+# Covers Ctrl+C and a normal quit out of ani-cli's menu alike.
+trap 'restore; exit 0' INT TERM
+trap 'restore' EXIT
+
+ANI_CLI_PLAYER="$SELF_DIR/mpvpaper-feed" \
+ANI_CLI_NO_DETACH=1 \
+    ani-cli "$@"

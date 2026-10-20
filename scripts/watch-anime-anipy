@@ -1,0 +1,68 @@
+#!/bin/sh
+# watch-anime-anipy — play anime on the desktop wallpaper, via anipy-cli.
+#
+#   watch-anime-anipy                      pick interactively
+#   watch-anime-anipy -B -s "frieren:1-12:sub"   binge a range, auto-advancing
+#   watch-anime-anipy -s "steins gate:1:sub"     one episode, straight in
+#
+# All arguments are passed straight through to anipy-cli.
+#
+# This is watch-anime's twin for anipy-cli, written because anidb.app — the sole
+# backend of ani-cli 5.x — went dark on 2026-09-03 and took `watch-anime` with
+# it. See Rice_Notes/Next-Steps.txt.
+#
+# Auto-advance is anipy-cli's own: anipy_api's player base calls
+# _sub_proc.wait(), and anipy-feed blocks until eof-reached. No mpv hooks.
+#
+# Why XDG_CONFIG_HOME rather than a flag:
+#   anipy-cli picks its player from config.yaml's player_path. Its -p flag only
+#   accepts a fixed list of known players, so an arbitrary shim path cannot be
+#   passed on the command line. anipy-cli finds config.yaml through appdirs,
+#   which honours XDG_CONFIG_HOME, so pointing that at a parallel config dir
+#   swaps the player for this invocation only — your normal `anipy-cli` keeps
+#   playing in a regular mpv window. Only XDG_CONFIG_HOME moves, so history and
+#   seasonals (XDG_DATA_HOME) stay shared between both modes.
+#
+# Leaves the desktop the way it found it — see restore() below.
+
+set -u
+
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+IPC="$SELF_DIR/mpvpaper-ipc"
+START="$SELF_DIR/wallpaper-start"
+CONF_ROOT="${ANIPY_WALLPAPER_CONFIG:-$HOME/.config/anipy-wallpaper}"
+
+command -v anipy-cli >/dev/null 2>&1 || { printf 'watch-anime-anipy: anipy-cli is not installed\n' >&2; exit 1; }
+[ -f "$CONF_ROOT/anipy-cli/config.yaml" ] || {
+    printf 'watch-anime-anipy: no wallpaper config at %s/anipy-cli/config.yaml\n' "$CONF_ROOT" >&2; exit 1; }
+
+started_it=0
+if ! pgrep -x mpvpaper >/dev/null 2>&1; then
+    "$START" --quiet || exit 1
+    started_it=1
+fi
+
+restore() {
+    if [ "$started_it" = 1 ]; then
+        pkill -x mpvpaper 2>/dev/null
+        rm -f "${MPVPAPER_SOCKET:-/tmp/mpvpaper.sock}"
+    else
+        "$IPC" set mute 'true'                 2>/dev/null
+        "$IPC" set loop-file '"inf"'           2>/dev/null
+        # Belt and braces: anipy-feed clears this itself, but if it was killed
+        # hard the ambient mp4 would be probed as HLS and never come back.
+        "$IPC" set demuxer-lavf-format '""'    2>/dev/null
+        if [ -n "${MPVPAPER_AMBIENT:-}" ] && [ -f "$MPVPAPER_AMBIENT" ]; then
+            "$IPC" load "$MPVPAPER_AMBIENT" 2>/dev/null
+        elif [ -f "$HOME/Videos/wallpaper.mp4" ]; then
+            "$IPC" load "$HOME/Videos/wallpaper.mp4" 2>/dev/null
+        else
+            "$IPC" load "$HOME/Pictures/wallpaper.jpg" 2>/dev/null
+        fi
+    fi
+}
+
+trap 'restore; exit 0' INT TERM
+trap 'restore' EXIT
+
+XDG_CONFIG_HOME="$CONF_ROOT" anipy-cli "$@"

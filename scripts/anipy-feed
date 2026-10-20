@@ -1,0 +1,197 @@
+#!/bin/sh
+# anipy-feed — anipy-cli player shim: play an episode on the wallpaper layer.
+#
+#   anipy-cli  (with player_path: ~/.config/scripts/anipy-feed in config.yaml)
+#
+# This is mpvpaper-feed's twin, for anipy-cli instead of ani-cli. Same idea
+# (see Rice_Notes/Video-Wallpaper-Plan.md §2-§3): mpvpaper IS mpv, already bound
+# to the background layer, so we push the stream URL into its IPC socket rather
+# than opening a window.
+#
+# Why a SEPARATE script and not a flag on mpvpaper-feed:
+#   The two tools hand the player a different argv shape, and the difference is
+#   load-bearing. ani-cli puts the URL LAST; anipy-cli puts it SECOND and ends
+#   with --keep-open=no. mpvpaper-feed takes "the last argument" as the URL, so
+#   pointed at anipy-cli it would faithfully try to play the string
+#   "--keep-open=no". Here the URL is found by scheme instead of by position.
+#
+# Why it BLOCKS until the episode ends:
+#   anipy_api's player base calls _sub_proc.wait(), so a player that blocks is
+#   what makes binge mode (-B 1-12) walk a range unattended. Same free
+#   auto-advance mpvpaper-feed gets out of ani-cli.
+#
+# The name matters, exactly as it does for mpvpaper-feed — but differently.
+# ani-cli takes its mpv branch if the player name merely CONTAINS "mpv";
+# anipy_api.player.get_player() looks the stem up in a dict, so the file it
+# invokes must be named exactly "mpv". Hence anipy-player/mpv, a symlink to this
+# script: the real name stays descriptive, the link satisfies the lookup.
+#
+# anipy-cli titles look like "[animehub] Steins;Gate E1 [sub][720p]", not
+# ani-cli's "Steins;Gate Episode 1", so the title parse differs too.
+
+set -u
+
+# readlink -f, not dirname "$0": anipy-cli invokes us through the anipy-player/mpv
+# symlink (it dispatches on the filename stem), so a plain $0 resolves SELF_DIR to
+# the symlink's directory and every "$IPC" call below becomes a silent
+# command-not-found — anipy-cli discards the player's stderr, so the only symptom
+# is a wallpaper that never changes.
+SELF_DIR=$(dirname -- "$(readlink -f -- "$0")")
+IPC="$SELF_DIR/mpvpaper-ipc"
+[ -x "$IPC" ] || { printf 'anipy-feed: cannot find mpvpaper-ipc at %s\n' "$IPC" >&2; exit 1; }
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/mpvpaper-ani"
+STATE="$STATE_DIR/resume.json"
+POLL="${MPVPAPER_POLL:-5}"
+LOAD_TIMEOUT="${MPVPAPER_LOAD_TIMEOUT:-60}"
+SEEK_TIMEOUT="${MPVPAPER_SEEK_TIMEOUT:-30}"
+
+log() { printf 'anipy-feed: %s\n' "$1" >&2; }
+
+# --- parse anipy-cli's argv -----------------------------------------------
+# Positional assumptions are what broke reuse of mpvpaper-feed, so make none:
+# match the URL on its scheme and pick the flags out by name.
+url=""; media_title=""; referrer=""; subs=""; lavf=""
+for a in "$@"; do
+    case "$a" in
+        http://*|https://*)      [ -n "$url" ] || url="$a" ;;
+        --force-media-title=*)   media_title="${a#--force-media-title=}" ;;
+        --referrer=*)            referrer="${a#--referrer=}" ;;
+        --sub-files=*)           subs="${a#--sub-files=}" ;;
+        --demuxer-lavf-format=*) lavf="${a#--demuxer-lavf-format=}" ;;
+    esac
+done
+[ -n "$url" ] || { log "no http(s) URL in arguments"; exit 2; }
+
+# ANIPY_FEED_DEBUG=1 dumps the argv anipy-cli actually handed us. The flags here
+# are not stable across providers, so when a stream misbehaves this is the first
+# thing to look at.
+[ "${ANIPY_FEED_DEBUG:-0}" = "1" ] && {
+    { printf '=== %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; for a in "$@"; do printf 'ARG: %s\n' "$a"; done; } \
+        >>"${ANIPY_FEED_LOG:-/tmp/anipy-feed-argv.log}"
+}
+
+# "[animehub] Steins;Gate E1 [sub][720p]" -> title="Steins;Gate", ep="1"
+anime_title=$(printf '%s' "$media_title" | sed -E 's/^\[[^]]*\] //; s/ E[0-9.]+ \[.*$//')
+ep_no=$(printf '%s' "$media_title" | sed -nE 's/.* E([0-9.]+) \[.*/\1/p')
+[ -n "$anime_title" ] || anime_title="$media_title"
+
+# --- position store (plan §7.2) -------------------------------------------
+# Same schema mpvpaper-feed writes, so wallpaper-resume needs no changes.
+save_position() {
+    pos=$("$IPC" get time-pos 2>/dev/null) || return 0
+    [ -n "$pos" ] || return 0
+    dur=$("$IPC" get duration 2>/dev/null)
+    [ -n "$dur" ] || dur=0
+    mkdir -p "$STATE_DIR" || return 0
+    if jq -nc \
+        --arg t  "$anime_title" \
+        --arg e  "$ep_no" \
+        --arg u  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --argjson p "$pos" \
+        --argjson d "$dur" \
+        --argjson c "${EP_DONE:-false}" \
+        '{kind:"anime",anime_title:$t,ep_no:$e,position:$p,duration:$d,completed:$c,updated:$u}' \
+        >"$STATE.tmp" 2>/dev/null
+    then
+        mv -f "$STATE.tmp" "$STATE"
+    else
+        rm -f "$STATE.tmp"
+    fi
+}
+
+EP_DONE=false
+reset_demuxer() { [ -n "${lavf:-}" ] && "$IPC" set demuxer-lavf-format '""' 2>/dev/null; return 0; }
+trap 'save_position; reset_demuxer; exit 0' INT TERM
+
+"$IPC" get idle-active >/dev/null 2>&1 || {
+    rc=$?
+    [ "$rc" = 3 ] && log "mpvpaper isn't running — start it first (see wallpaper-start)"
+    exit 1
+}
+
+# --- play -----------------------------------------------------------------
+# referrer before loadfile: some CDNs reject the segment requests without it,
+# and mpv only applies it to requests made after it is set. animehub's current
+# CDN happens not to check, but the provider list is the part that keeps
+# changing, so send what anipy-cli gave us rather than assume.
+[ -n "$referrer" ] && "$IPC" set referrer "$(jq -nc --arg r "$referrer" '$r')"
+
+# --demuxer-lavf-format=hls is NOT cosmetic, and dropping it fails silently in
+# the most confusing way available: animehub's CDN serves the .m3u8 playlist
+# under "Content-Type: image/jpeg", so mpv probes it as a JPEG, "plays" a
+# 1-second still, reports eof-reached, and the episode ends before it starts.
+# Forcing the demuxer is what makes it a video stream. Cleared in reset_demuxer
+# below, or the ambient wallpaper.mp4 gets probed as HLS on the way back out.
+[ -n "$lavf" ] && "$IPC" set demuxer-lavf-format "$(jq -nc --arg f "$lavf" '$f')"
+
+"$IPC" set aid '"auto"'
+"$IPC" set mute 'false'
+"$IPC" set loop-file '"no"'    # an episode must end, or eof-reached never fires
+"$IPC" load "$url"             # loadfile + the mandatory unpause
+
+i=0
+until [ -n "$("$IPC" get filename 2>/dev/null)" ]; do
+    i=$((i + 1))
+    if [ "$i" -ge "$LOAD_TIMEOUT" ]; then
+        log "stream did not open within ${LOAD_TIMEOUT}s: $url"
+        exit 1
+    fi
+    sleep 1
+done
+
+# anipy-cli passes --sub-files= (empty) when the provider has no sidecar subs.
+[ -n "$subs" ] && "$IPC" raw "$(jq -nc --arg s "$subs" '{command:["sub-add",$s]}')" >/dev/null
+
+# A second gate before seeking, which mpvpaper-feed does not need. "filename"
+# is set the instant loadfile is issued, but with HLS the playlist has not been
+# parsed yet at that point — duration is unknown, seekable is still false, and a
+# seek issued now is accepted and silently dropped. The episode then plays from
+# 0:00 and the resume looks like it simply did not happen. Wait for the stream to
+# actually become seekable first.
+if [ -n "${MPVPAPER_RESUME_AT:-}" ] && [ "${MPVPAPER_RESUME_AT}" != "0" ]; then
+    i=0
+    until [ "$("$IPC" get seekable 2>/dev/null)" = "true" ]; do
+        i=$((i + 1))
+        if [ "$i" -ge "$SEEK_TIMEOUT" ]; then
+            log "stream never reported seekable within ${SEEK_TIMEOUT}s — playing from the start"
+            break
+        fi
+        sleep 1
+    done
+fi
+
+if [ -n "${MPVPAPER_RESUME_AT:-}" ]; then
+    if [ -n "${MPVPAPER_EXPECT_TITLE:-}" ] && [ "$MPVPAPER_EXPECT_TITLE" != "$anime_title" ]; then
+        log "expected '$MPVPAPER_EXPECT_TITLE' but anipy-cli matched '$anime_title' — starting from the beginning instead of seeking"
+    else
+        "$IPC" seek "$MPVPAPER_RESUME_AT"
+    fi
+    unset MPVPAPER_RESUME_AT
+fi
+
+if [ "${MPVPAPER_START_PAUSED:-0}" = "1" ]; then
+    "$IPC" set pause 'true'
+    "$IPC" set mute  'true'
+fi
+
+# --- block until the episode finishes -------------------------------------
+while :; do
+    if [ "$("$IPC" get eof-reached 2>/dev/null)" = "true" ]; then
+        EP_DONE=true
+        break
+    fi
+    if [ "$("$IPC" get idle-active 2>/dev/null)" = "true" ]; then
+        log "playback stopped unexpectedly (stream dropped or URL rejected)"
+        break
+    fi
+    if ! "$IPC" get time-pos >/dev/null 2>&1; then
+        log "lost the mpvpaper socket — did the wallpaper crash?"
+        break
+    fi
+    save_position
+    sleep "$POLL"
+done
+
+save_position
+reset_demuxer

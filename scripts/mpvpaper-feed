@@ -1,0 +1,159 @@
+#!/bin/sh
+# mpvpaper-feed — ANI_CLI_PLAYER shim: play an episode on the wallpaper layer.
+#
+#   ANI_CLI_PLAYER=~/.config/scripts/mpvpaper-feed ANI_CLI_NO_DETACH=1 ani-cli
+#
+# Why this works at all (see Rice_Notes/Video-Wallpaper-Plan.md §2-§3):
+#   ani-cli never needs to own an mpv window. mpvpaper IS mpv, already bound to
+#   the background layer, so we just push the stream URL into its IPC socket.
+#
+# Why it BLOCKS until the episode ends:
+#   ani-cli's play_episode() opens with a bare `wait`, and range mode is a plain
+#   `for i in $_range` loop. So a player that blocks gives auto-advance for free —
+#   `ani-cli -e "1-12"` walks a whole season with no mpv hooks involved.
+#
+# The name matters: it contains "mpv", so ani-cli takes its *mpv* branch and
+# hands us --force-media-title="<Anime> Episode <n>". That string is the only
+# place the episode number is available to us — ani-cli doesn't export it.
+
+set -u
+
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+IPC="$SELF_DIR/mpvpaper-ipc"
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/mpvpaper-ani"
+STATE="$STATE_DIR/resume.json"
+POLL="${MPVPAPER_POLL:-5}"        # seconds between position saves
+LOAD_TIMEOUT="${MPVPAPER_LOAD_TIMEOUT:-60}"   # halve for seconds; streams are slow
+
+log() { printf 'mpvpaper-feed: %s\n' "$1" >&2; }
+
+# --- parse ani-cli's argv -------------------------------------------------
+# The URL is always the LAST argument. Everything before it is flags we either
+# consume (--force-media-title) or ignore (ani-skip chapter flags).
+url=""
+media_title=""
+for a in "$@"; do
+    case "$a" in
+        --force-media-title=*) media_title="${a#--force-media-title=}" ;;
+    esac
+    url="$a"
+done
+[ -n "$url" ] || { log "no URL given"; exit 2; }
+
+# "Some Anime Episode 7" -> title="Some Anime", ep="7"
+anime_title="$media_title"
+ep_no=""
+case "$media_title" in
+    *" Episode "*)
+        anime_title="${media_title% Episode *}"
+        ep_no="${media_title##* Episode }"
+        ;;
+esac
+
+# --- position store (plan §7.2) -------------------------------------------
+# Written every POLL seconds, not just on exit: a poweroff never runs a trap,
+# so periodic writes are what make resume survive a hard shutdown. Worst case
+# you lose POLL seconds. Written temp-then-rename so a shutdown mid-write can't
+# leave a truncated file behind.
+save_position() {
+    pos=$("$IPC" get time-pos 2>/dev/null) || return 0
+    [ -n "$pos" ] || return 0
+    dur=$("$IPC" get duration 2>/dev/null)
+    [ -n "$dur" ] || dur=0
+    mkdir -p "$STATE_DIR" || return 0
+    if jq -nc \
+        --arg t  "$anime_title" \
+        --arg e  "$ep_no" \
+        --arg u  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --argjson p "$pos" \
+        --argjson d "$dur" \
+        --argjson c "${EP_DONE:-false}" \
+        '{kind:"anime",anime_title:$t,ep_no:$e,position:$p,duration:$d,completed:$c,updated:$u}' \
+        >"$STATE.tmp" 2>/dev/null
+    then
+        mv -f "$STATE.tmp" "$STATE"
+    else
+        rm -f "$STATE.tmp"
+    fi
+}
+
+# Flipped to true once the episode actually reaches EOF, so wallpaper-resume can
+# tell "stopped halfway" from "finished, offer the next one".
+EP_DONE=false
+
+trap 'save_position; exit 0' INT TERM
+
+# --- play -----------------------------------------------------------------
+"$IPC" get idle-active >/dev/null 2>&1 || {
+    rc=$?
+    [ "$rc" = 3 ] && log "mpvpaper isn't running — start it first (see wallpaper-start)"
+    exit "$rc"
+}
+
+# The ambient wallpaper runs muted; an episode should be audible. The Waybar
+# wallpaper-audio toggle can still silence it at any point after this.
+"$IPC" set aid '"auto"'
+"$IPC" set mute 'false'
+"$IPC" set loop-file '"no"'    # an episode must end, or eof-reached never fires
+"$IPC" load "$url"             # loadfile + the mandatory unpause
+
+# Wait for the stream to actually open. Network sources take noticeably longer
+# than the local files this was first tested against, so don't treat a slow
+# start as a failure.
+i=0
+until [ -n "$("$IPC" get filename 2>/dev/null)" ]; do
+    i=$((i + 1))
+    if [ "$i" -ge "$LOAD_TIMEOUT" ]; then
+        log "stream did not open within ${LOAD_TIMEOUT}s: $url"
+        exit 1
+    fi
+    sleep 1
+done
+
+# Resume mid-episode if we were asked to (plan §7.3). Cleared afterwards so the
+# *next* episode in a range starts from zero rather than re-seeking.
+# ani-cli's -S 1 trusts search-result ordering, which can shift between sessions.
+# Resuming into the WRONG show at minute 14 would be worse than starting over, so
+# only seek when the title ani-cli actually matched is the one we asked for.
+if [ -n "${MPVPAPER_RESUME_AT:-}" ]; then
+    if [ -n "${MPVPAPER_EXPECT_TITLE:-}" ] && [ "$MPVPAPER_EXPECT_TITLE" != "$anime_title" ]; then
+        log "expected '$MPVPAPER_EXPECT_TITLE' but ani-cli matched '$anime_title' — starting from the beginning instead of seeking"
+    else
+        "$IPC" seek "$MPVPAPER_RESUME_AT"
+    fi
+    unset MPVPAPER_RESUME_AT
+fi
+
+# Login auto-resume lands here: park on the resumed frame, silent, instead of
+# suddenly playing anime at whatever moment the session came up. The blocking
+# loop below is happy to sit paused indefinitely — eof-reached simply never
+# arrives until something unpauses (SUPER+P, or the Waybar toggle for sound).
+if [ "${MPVPAPER_START_PAUSED:-0}" = "1" ]; then
+    "$IPC" set pause 'true'
+    "$IPC" set mute  'true'
+fi
+
+# --- block until the episode finishes -------------------------------------
+# eof-reached, not idle-active: keep-open=yes parks mpv on the final frame
+# instead of going idle, and without keep-open mpvpaper exits outright and the
+# wallpaper disappears. idle-active only shows up here as a failure signal —
+# if the stream dies or the URL was bad, mpv falls back to idle.
+while :; do
+    if [ "$("$IPC" get eof-reached 2>/dev/null)" = "true" ]; then
+        EP_DONE=true
+        break
+    fi
+    if [ "$("$IPC" get idle-active 2>/dev/null)" = "true" ]; then
+        log "playback stopped unexpectedly (stream dropped or URL rejected)"
+        break
+    fi
+    if ! "$IPC" get time-pos >/dev/null 2>&1; then
+        log "lost the mpvpaper socket — did the wallpaper crash?"
+        break
+    fi
+    save_position
+    sleep "$POLL"
+done
+
+save_position

@@ -1,0 +1,27 @@
+# anipy-cli config for wallpaper mode. Only scripts/watch-anime-anipy uses it:
+# it points XDG_CONFIG_HOME at ~/.config/anipy-wallpaper, so a plain `anipy-cli`
+# keeps its own config and keeps playing in a normal mpv window.
+#
+# This is a seed, not a file to keep in sync. anipy-cli rewrites it on every
+# run, filling in every other option with its defaults — and expanding ~ into
+# an absolute path, which is why the live copy won't match this one.
+
+# The wallpaper shim. It must be reached through a file named exactly "mpv":
+# anipy-cli picks how to drive a player by its filename, from a fixed list.
+player_path: ~/.config/scripts/anipy-player/mpv
+
+# anipy-cli's built-in default is anidbapp, the same backend ani-cli 5.x lost
+# when anidb.app went down — so name a provider explicitly, for every mode.
+providers:
+    default:
+    - animehub
+    binge:
+    - animehub
+    download:
+    - animehub
+    seasonal:
+    - animehub
+    anilist:
+    - animehub
+    mal:
+    - animehub
