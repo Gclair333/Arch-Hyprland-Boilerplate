@@ -58,7 +58,8 @@ Hyprland's config *options* (as opposed to the `hyprctl` command) aren't in a ma
 - `hyprctl configerrors` right after — catches a bad line that would otherwise fail silently.
 - `killall -SIGUSR2 waybar` after editing either Waybar file — reloads both in place.
 - `hyprctl binds` — every keybind active right now, straight from the compositor. The ground
-  truth if the config and what actually happens disagree.
+  truth if the config and what actually happens disagree. `SUPER + /` shows the same list,
+  readable and searchable.
 - `hyprctl monitors` / `hyprctl clients` — inspect live state generally; the fastest way to
   answer "why isn't this doing what I expect."
 - `~/.config/scripts/mpvpaper-ipc get time-pos` — ask the running video wallpaper what it's

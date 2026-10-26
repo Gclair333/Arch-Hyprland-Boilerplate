@@ -497,10 +497,12 @@ keyboard_page() {
 			"$(row 󰌌 "Layout" "$(layout_name "$layout" "$variant")")" \
 			"$(row 󰔟 "Repeat delay" "$delay ms")" \
 			"$(row 󰑓 "Repeat speed" "$rate per second")" \
-			"$(row 󰎠 "Num Lock on at login" "$(onoff "$numlock")")"
+			"$(row 󰎠 "Num Lock on at login" "$(onoff "$numlock")")" \
+			"$(row 󰘳 "Keyboard shortcuts" "SUPER + /")"
 
 		case "$REPLY" in
 			"$BACK") return ;;
+			"󰘳  Keyboard shortcuts"*) exec "$SCRIPTS/keybinds-menu.sh" 9>&- ;;
 			"󰌌  Layout"*)
 				local -a args=()
 				while IFS=$'\t' read -r desc l v; do args+=("$desc" "$l:$v"); done < <(layout_list)

@@ -45,6 +45,7 @@ scripts/screenshot.sh         grim/slurp wrapper (region/screen, copy/save)
 scripts/wifi-menu.sh          wofi + nmcli Wi-Fi picker, opened by the network pill
 scripts/power-menu.sh         wofi session menu, opened by the power pill
 scripts/settings-menu.sh      wofi Settings menu, opened by the gear pill or SUPER+I
+scripts/keybinds-menu.sh      searchable list of every shortcut, opened by SUPER+/
 scripts/backlight             screen brightness through logind: the keys, and hypridle's dim
 scripts/lock-hint             the warnings under the lock screen's password box
 
@@ -118,6 +119,12 @@ file is there, Hyprland starts fine but the background stays black.
 
 ## Keybindings
 
+Forgot one? `SUPER + /` opens a searchable list of every shortcut (also in Settings → Keyboard).
+It's built live from `hyprctl binds`, so it always matches what's really bound. Each bind in
+`hypr/hyprland.conf` carries its description as `bindd = MODS, KEY, Description, dispatcher, args`
+(the `d` means "has a description"; `bindeld`, `bindld` and `bindmd` work the same way). Give
+binds you add a description too, without commas in it; one without shows its raw command.
+
 | Combo | Action |
 | --- | --- |
 | `SUPER + Return` | Terminal (kitty) |
@@ -126,6 +133,7 @@ file is there, Hyprland starts fine but the background stays black.
 | `SUPER + F` | Toggle fullscreen |
 | `SUPER + V` | Toggle floating |
 | `SUPER + I` | [Settings](#settings-menu), as on Windows |
+| `SUPER + /` | This list of shortcuts, searchable |
 | `SUPER + SHIFT + L` | Lock the screen |
 | `SUPER + SHIFT + E` | Exit Hyprland |
 
