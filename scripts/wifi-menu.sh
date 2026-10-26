@@ -6,7 +6,9 @@
 set -uo pipefail
 
 wofi_menu() {
+	# allow_markup=false: an SSID with & or < would otherwise misrender.
 	wofi --dmenu --insensitive --cache-file /dev/null \
+	     --define allow_markup=false \
 	     --width 380 --height 420 --prompt "${1:-Wi-Fi}"
 }
 
@@ -80,9 +82,14 @@ secured=$(nmcli -t -f SSID,SECURITY device wifi list \
 
 if [ "$secured" = "yes" ]; then
 	pass=$(wofi --dmenu --password --cache-file /dev/null \
+	           --define allow_markup=false \
 	           --width 380 --height 60 --prompt "Password for $ssid")
 	[ -z "$pass" ] && exit 0
-	nmcli device wifi connect "$ssid" password "$pass"
+	# Feed the password on stdin (--ask), never as an argument: arguments are
+	# readable by every process via ps / /proc/PID/cmdline. printf is a bash
+	# builtin, so the password never appears in any command line.
+	printf '%s\n' "$pass" | nmcli --ask device wifi connect "$ssid" >/dev/null 2>&1 \
+		|| notify-send "Wi-Fi" "Couldn't connect to $ssid (wrong password?)"
 else
 	nmcli device wifi connect "$ssid"
 fi
