@@ -17,7 +17,7 @@
 
 set -u
 
-SOCK="${MPVPAPER_SOCKET:-/tmp/mpvpaper.sock}"
+SOCK="${MPVPAPER_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/mpvpaper.sock}"
 
 die()   { printf 'mpvpaper-ipc: %s\n' "$1" >&2; exit 1; }
 nosock() { printf 'mpvpaper-ipc: no socket at %s (is mpvpaper running?)\n' "$SOCK" >&2; exit 3; }

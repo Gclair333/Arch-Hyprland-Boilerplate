@@ -33,7 +33,7 @@ fi
 restore() {
     if [ "$started_it" = 1 ]; then
         pkill -x mpvpaper 2>/dev/null
-        rm -f "${MPVPAPER_SOCKET:-/tmp/mpvpaper.sock}"
+        rm -f "${MPVPAPER_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/mpvpaper.sock}"
     else
         # Put the ambient loop back: re-mute, restore looping, reload the source.
         "$IPC" set mute 'true'          2>/dev/null

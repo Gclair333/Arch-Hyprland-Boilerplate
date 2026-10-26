@@ -16,7 +16,7 @@
 
 set -u
 
-SOCK="${MPVPAPER_SOCKET:-/tmp/mpvpaper.sock}"
+SOCK="${MPVPAPER_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/mpvpaper.sock}"
 OUTPUT="${MPVPAPER_OUTPUT:-*}"
 
 # Fail at once without mpvpaper, so hyprland.conf's `||` falls through to the

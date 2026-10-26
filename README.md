@@ -329,7 +329,7 @@ At login, `scripts/wallpaper-start` plays the first of `$MPVPAPER_AMBIENT`,
 installed or fails to start, `hyprland.conf` falls back to showing the image with `awww`.
 
 mpvpaper is mpv drawing on the background layer, so the running wallpaper exposes mpv's whole
-[JSON IPC](https://mpv.io/manual/stable/#json-ipc) interface on `/tmp/mpvpaper.sock`.
+[JSON IPC](https://mpv.io/manual/stable/#json-ipc) interface on `$XDG_RUNTIME_DIR/mpvpaper.sock`.
 `scripts/mpvpaper-ipc` wraps it, and is handy to poke at directly:
 
 ```bash
